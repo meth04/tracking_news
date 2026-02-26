@@ -9,6 +9,7 @@ from config.settings import lay_cau_hinh_nlp
 from news_ingestor.models.article import BaiBao, BaiBaoTho
 from news_ingestor.models.enums import TrangThai
 from news_ingestor.processing.cleaner import BoLamSach
+from news_ingestor.processing.content_fetcher import ContentFetcher
 from news_ingestor.processing.embeddings import BoTaoEmbeddings
 from news_ingestor.processing.entity_extractor import BoTrichXuatThucThe
 from news_ingestor.processing.sentiment import BoPhanTichCamXuc
@@ -21,8 +22,8 @@ logger = logging.getLogger(__name__)
 class LuongXuLy:
     """Pipeline xử lý NLP tổng hợp cho tin tức tài chính.
 
-    Luồng: BaiBaoTho → Làm sạch → Entity Extraction → Sentiment Analysis
-           → Embeddings → Lưu PostgreSQL + Vector DB
+    Luồng: BaiBaoTho → Fetch Full Content → Làm sạch → Entity Extraction
+           → Sentiment Analysis → Embeddings → Lưu DB + Vector DB
     """
 
     def __init__(
@@ -30,10 +31,17 @@ class LuongXuLy:
         kho_tin_tuc: Optional[KhoTinTuc] = None,
         kho_vector: Optional[KhoVector] = None,
         tao_embedding: bool = True,
+        fetch_content: bool = True,
     ):
         # Khởi tạo các module xử lý
         self._lam_sach = BoLamSach()
         self._trich_xuat = BoTrichXuatThucThe()
+
+        # Content Fetcher — lấy nội dung đầy đủ từ URL gốc
+        self._fetch_content = fetch_content
+        self._content_fetcher: Optional[ContentFetcher] = None
+        if fetch_content:
+            self._content_fetcher = ContentFetcher(timeout=20, delay=0.8)
 
         # Sentiment analyzer: dùng Gemini nếu có API key
         cau_hinh_nlp = lay_cau_hinh_nlp()
@@ -60,6 +68,7 @@ class LuongXuLy:
                 "embedding": self._tao_embedding,
                 "gemini": gemini_key is not None and gemini_key != "",
                 "vector_db": kho_vector is not None,
+                "content_fetch": fetch_content,
             }},
         )
 
@@ -70,16 +79,39 @@ class LuongXuLy:
             BaiBao đã xử lý, hoặc None nếu lỗi.
         """
         try:
+            # 0. Fetch nội dung đầy đủ từ URL gốc (nếu chưa có)
+            noi_dung_goc = bai_tho.noi_dung
+            noi_dung_day_du = ""
+
+            if self._fetch_content and self._content_fetcher and bai_tho.url:
+                try:
+                    fetch_result = self._content_fetcher.fetch_content(bai_tho.url)
+                    if fetch_result["success"] and fetch_result["noi_dung_day_du"]:
+                        noi_dung_day_du = fetch_result["noi_dung_day_du"]
+                        logger.debug(
+                            f"Fetched full content: {fetch_result['char_count']} chars "
+                            f"(was {len(noi_dung_goc)} chars) for: {bai_tho.tieu_de[:50]}"
+                        )
+                    else:
+                        logger.debug(
+                            f"Content fetch failed for {bai_tho.url}: {fetch_result.get('error', 'unknown')}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Content fetch error: {e}")
+
+            # Sử dụng nội dung đầy đủ nếu có, nếu không dùng nội dung từ crawler
+            noi_dung_phan_tich = noi_dung_day_du if noi_dung_day_du else noi_dung_goc
+
             # 1. Làm sạch nội dung
             tieu_de_sach = self._lam_sach.lam_sach_tieu_de(bai_tho.tieu_de)
-            noi_dung_sach = self._lam_sach.lam_sach(bai_tho.noi_dung)
-            tom_tat = self._lam_sach.tom_tat(noi_dung_sach)
+            noi_dung_sach = self._lam_sach.lam_sach(noi_dung_phan_tich)
+            tom_tat = self._lam_sach.tom_tat(noi_dung_goc if noi_dung_goc else noi_dung_sach)
 
-            # 2. Trích xuất thực thể
+            # 2. Trích xuất thực thể (dùng nội dung đầy đủ)
             van_ban_phan_tich = f"{tieu_de_sach} {noi_dung_sach}"
             ket_qua_ner = self._trich_xuat.phan_tich(van_ban_phan_tich)
 
-            # 3. Phân tích cảm xúc
+            # 3. Phân tích cảm xúc (dùng nội dung đầy đủ)
             ket_qua_cam_xuc = self._cam_xuc.phan_tich(van_ban_phan_tich)
 
             # 4. Tạo đối tượng BaiBao

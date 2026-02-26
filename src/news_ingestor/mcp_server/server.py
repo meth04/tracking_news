@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Optional
 
 from mcp.server import Server
-from mcp.server.stdio import run_server
+from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from news_ingestor.storage.repository import KhoTinTuc
@@ -373,5 +373,8 @@ async def chay_server() -> None:
     db.khoi_tao_bang()
 
     logger.info("Khởi động MCP Server: tin-tuc-tai-chinh")
-    async with run_server(server) as streams:
-        logger.info("MCP Server đang chạy...")
+
+    async with stdio_server() as (read_stream, write_stream):
+        init_options = server.create_initialization_options()
+        await server.run(read_stream, write_stream, init_options)
+

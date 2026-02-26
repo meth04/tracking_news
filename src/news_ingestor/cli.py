@@ -9,7 +9,7 @@ from pathlib import Path
 import click
 
 # Thêm thư mục gốc vào path để import config
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 
 @click.group()
