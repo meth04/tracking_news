@@ -1,0 +1,337 @@
+{
+    "ma_chung_khoan": {
+        "FPT": {
+            "ten_cong_ty": "Tập đoàn FPT",
+            "tu_khoa": [
+                "FPT",
+                "fpt",
+                "Tập đoàn FPT",
+                "FPT Corporation"
+            ]
+        },
+        "VNM": {
+            "ten_cong_ty": "Vinamilk",
+            "tu_khoa": [
+                "VNM",
+                "Vinamilk",
+                "Sữa Việt Nam",
+                "Vietnam Dairy"
+            ]
+        },
+        "VCB": {
+            "ten_cong_ty": "Ngân hàng Vietcombank",
+            "tu_khoa": [
+                "VCB",
+                "Vietcombank",
+                "Ngoại Thương",
+                "NHTMCP Ngoại Thương"
+            ]
+        },
+        "VIC": {
+            "ten_cong_ty": "Tập đoàn Vingroup",
+            "tu_khoa": [
+                "VIC",
+                "Vingroup",
+                "Tập đoàn Vingroup"
+            ]
+        },
+        "VHM": {
+            "ten_cong_ty": "Vinhomes",
+            "tu_khoa": [
+                "VHM",
+                "Vinhomes",
+                "Vin Homes"
+            ]
+        },
+        "HPG": {
+            "ten_cong_ty": "Hòa Phát",
+            "tu_khoa": [
+                "HPG",
+                "Hòa Phát",
+                "Hoa Phat",
+                "Tập đoàn Hòa Phát"
+            ]
+        },
+        "MSN": {
+            "ten_cong_ty": "Masan Group",
+            "tu_khoa": [
+                "MSN",
+                "Masan",
+                "Masan Group",
+                "Tập đoàn Masan"
+            ]
+        },
+        "MWG": {
+            "ten_cong_ty": "Thế Giới Di Động",
+            "tu_khoa": [
+                "MWG",
+                "Thế Giới Di Động",
+                "The Gioi Di Dong",
+                "Mobile World"
+            ]
+        },
+        "TCB": {
+            "ten_cong_ty": "Techcombank",
+            "tu_khoa": [
+                "TCB",
+                "Techcombank",
+                "Kỹ Thương",
+                "NHTMCP Kỹ Thương"
+            ]
+        },
+        "VPB": {
+            "ten_cong_ty": "VPBank",
+            "tu_khoa": [
+                "VPB",
+                "VPBank",
+                "VP Bank",
+                "Việt Nam Thịnh Vượng"
+            ]
+        },
+        "BID": {
+            "ten_cong_ty": "BIDV",
+            "tu_khoa": [
+                "BID",
+                "BIDV",
+                "Đầu Tư và Phát Triển",
+                "NHTMCP Đầu Tư"
+            ]
+        },
+        "CTG": {
+            "ten_cong_ty": "VietinBank",
+            "tu_khoa": [
+                "CTG",
+                "VietinBank",
+                "Vietin Bank",
+                "Công Thương"
+            ]
+        },
+        "GAS": {
+            "ten_cong_ty": "PV Gas",
+            "tu_khoa": [
+                "GAS",
+                "PV Gas",
+                "PVGas",
+                "Khí Việt Nam"
+            ]
+        },
+        "SAB": {
+            "ten_cong_ty": "Sabeco",
+            "tu_khoa": [
+                "SAB",
+                "Sabeco",
+                "Bia Sài Gòn",
+                "Saigon Beer"
+            ]
+        },
+        "MBB": {
+            "ten_cong_ty": "MB Bank",
+            "tu_khoa": [
+                "MBB",
+                "MB Bank",
+                "Quân Đội",
+                "NHTMCP Quân Đội"
+            ]
+        },
+        "ACB": {
+            "ten_cong_ty": "Ngân hàng Á Châu",
+            "tu_khoa": [
+                "ACB",
+                "Á Châu",
+                "Asia Commercial Bank"
+            ]
+        },
+        "SSI": {
+            "ten_cong_ty": "SSI Securities",
+            "tu_khoa": [
+                "SSI",
+                "SSI Securities",
+                "Chứng khoán SSI"
+            ]
+        },
+        "VRE": {
+            "ten_cong_ty": "Vincom Retail",
+            "tu_khoa": [
+                "VRE",
+                "Vincom Retail",
+                "Vincom"
+            ]
+        },
+        "PLX": {
+            "ten_cong_ty": "Petrolimex",
+            "tu_khoa": [
+                "PLX",
+                "Petrolimex",
+                "Xăng Dầu",
+                "Tập đoàn Xăng Dầu"
+            ]
+        },
+        "VJC": {
+            "ten_cong_ty": "Vietjet Air",
+            "tu_khoa": [
+                "VJC",
+                "Vietjet",
+                "Vietjet Air"
+            ]
+        },
+        "STB": {
+            "ten_cong_ty": "Sacombank",
+            "tu_khoa": [
+                "STB",
+                "Sacombank",
+                "Sài Gòn Thương Tín"
+            ]
+        },
+        "HVN": {
+            "ten_cong_ty": "Vietnam Airlines",
+            "tu_khoa": [
+                "HVN",
+                "Vietnam Airlines",
+                "Hàng không Việt Nam"
+            ]
+        },
+        "POW": {
+            "ten_cong_ty": "PV Power",
+            "tu_khoa": [
+                "POW",
+                "PV Power",
+                "Điện lực Dầu khí"
+            ]
+        },
+        "NVL": {
+            "ten_cong_ty": "Novaland",
+            "tu_khoa": [
+                "NVL",
+                "Novaland",
+                "Nova Land"
+            ]
+        },
+        "REE": {
+            "ten_cong_ty": "REE Corporation",
+            "tu_khoa": [
+                "REE",
+                "REE Corporation",
+                "Cơ điện lạnh"
+            ]
+        },
+        "GVR": {
+            "ten_cong_ty": "Tập đoàn Cao Su",
+            "tu_khoa": [
+                "GVR",
+                "Cao Su Việt Nam",
+                "Vietnam Rubber"
+            ]
+        },
+        "BCM": {
+            "ten_cong_ty": "Becamex IDC",
+            "tu_khoa": [
+                "BCM",
+                "Becamex",
+                "Becamex IDC"
+            ]
+        },
+        "DHG": {
+            "ten_cong_ty": "Dược Hậu Giang",
+            "tu_khoa": [
+                "DHG",
+                "Dược Hậu Giang",
+                "DHG Pharma"
+            ]
+        },
+        "PNJ": {
+            "ten_cong_ty": "Phú Nhuận Jewelry",
+            "tu_khoa": [
+                "PNJ",
+                "Phú Nhuận",
+                "PNJ Jewelry"
+            ]
+        },
+        "DGC": {
+            "ten_cong_ty": "Hóa Chất Đức Giang",
+            "tu_khoa": [
+                "DGC",
+                "Đức Giang",
+                "Hóa Chất Đức Giang"
+            ]
+        }
+    },
+    "tu_khoa_vi_mo": [
+        "lãi suất",
+        "tỷ giá",
+        "lạm phát",
+        "GDP",
+        "CPI",
+        "ngân hàng nhà nước",
+        "NHNN",
+        "FED",
+        "chính sách tiền tệ",
+        "dự trữ ngoại hối",
+        "tăng trưởng kinh tế",
+        "vĩ mô",
+        "xuất khẩu",
+        "nhập khẩu",
+        "cán cân thương mại",
+        "trái phiếu chính phủ",
+        "thị trường mở",
+        "OMO",
+        "room tín dụng",
+        "tín dụng",
+        "huy động vốn"
+    ],
+    "tu_khoa_nganh": {
+        "ngan_hang": [
+            "ngân hàng",
+            "bank",
+            "tín dụng",
+            "cho vay",
+            "huy động",
+            "NIM"
+        ],
+        "bat_dong_san": [
+            "bất động sản",
+            "BĐS",
+            "dự án",
+            "nhà ở",
+            "chung cư"
+        ],
+        "chung_khoan": [
+            "chứng khoán",
+            "VN-Index",
+            "cổ phiếu",
+            "margin",
+            "thanh khoản"
+        ],
+        "cong_nghe": [
+            "công nghệ",
+            "AI",
+            "số hóa",
+            "chuyển đổi số",
+            "phần mềm"
+        ],
+        "nang_luong": [
+            "dầu khí",
+            "điện",
+            "năng lượng",
+            "xăng",
+            "gas"
+        ],
+        "ban_le": [
+            "bán lẻ",
+            "tiêu dùng",
+            "thương mại điện tử",
+            "TMĐT"
+        ],
+        "xay_dung": [
+            "xây dựng",
+            "hạ tầng",
+            "cao tốc",
+            "cầu đường"
+        ],
+        "duoc_pham": [
+            "dược phẩm",
+            "y tế",
+            "thuốc",
+            "bệnh viện"
+        ]
+    }
+}

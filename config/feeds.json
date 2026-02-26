@@ -1,5 +1,39 @@
 {
-  "feed_urls": [
-    "http://localhost:8080/feed.xml"
+  "nguon_rss": [
+    {
+      "ten": "CafeF - Chứng khoán",
+      "url": "https://cafef.vn/rss/chung-khoan.rss",
+      "danh_muc": "MICRO"
+    },
+    {
+      "ten": "CafeF - Vĩ mô",
+      "url": "https://cafef.vn/rss/vi-mo-dau-tu.rss",
+      "danh_muc": "MACRO"
+    },
+    {
+      "ten": "CafeF - Doanh nghiệp",
+      "url": "https://cafef.vn/rss/doanh-nghiep.rss",
+      "danh_muc": "MICRO"
+    },
+    {
+      "ten": "VnExpress - Kinh doanh",
+      "url": "https://vnexpress.net/rss/kinh-doanh.rss",
+      "danh_muc": "MACRO"
+    },
+    {
+      "ten": "VnExpress - Chứng khoán",
+      "url": "https://vnexpress.net/rss/kinh-doanh/chung-khoan.rss",
+      "danh_muc": "MICRO"
+    },
+    {
+      "ten": "Thanh Niên - Tài chính",
+      "url": "https://thanhnien.vn/rss/tai-chinh-kinh-doanh.rss",
+      "danh_muc": "MACRO"
+    },
+    {
+      "ten": "VietStock - Tin tức",
+      "url": "https://vietstock.vn/rss/tin-tuc.rss",
+      "danh_muc": "MICRO"
+    }
   ]
 }
