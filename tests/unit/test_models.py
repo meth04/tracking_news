@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from news_ingestor.models.article import BaiBao, BaiBaoTho, ThongKeCamXuc
 from news_ingestor.models.enums import CamXuc, DanhMuc, TrangThai
 
@@ -38,6 +36,8 @@ class TestBaiBaoTho:
         )
         assert bai.tieu_de == "FPT báo lãi kỷ lục quý 3"
         assert bai.nguon_tin == "CafeF"
+        assert bai.url_chuan_hoa == "https://example.com/fpt-lai-ky-luc"
+        assert len(bai.tieu_de_hash) == 64
         assert bai.thoi_gian_xuat_ban is not None
 
     def test_thoi_gian_mac_dinh(self):
@@ -56,16 +56,24 @@ class TestBaiBao:
         bai = BaiBao(
             tieu_de="VCB tăng trưởng tín dụng",
             noi_dung_tom_tat="Vietcombank mở rộng...",
-            url="https://example.com/vcb",
+            url="https://example.com/vcb?utm_source=abc",
             nguon_tin="VnExpress",
             danh_muc=DanhMuc.DOANH_NGHIEP,
             ma_chung_khoan_lien_quan=["VCB"],
             diem_cam_xuc=0.5,
             nhan_cam_xuc=CamXuc.TICH_CUC,
+            impact_score=9,
+            impact_level="HIGH",
+            impact_tags=["ngan_hang", "lai_suat"],
+            is_high_impact=True,
         )
         assert bai.id is not None
         assert bai.ma_chung_khoan_lien_quan == ["VCB"]
         assert bai.diem_cam_xuc == 0.5
+        assert bai.url_chuan_hoa == "https://example.com/vcb"
+        assert len(bai.tieu_de_hash) == 64
+        assert bai.impact_level == "HIGH"
+        assert bai.is_high_impact is True
         assert bai.trang_thai == TrangThai.CHO_XU_LY
 
     def test_diem_cam_xuc_rang_buoc(self):

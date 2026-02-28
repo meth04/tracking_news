@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
 
 from news_ingestor.utils.text_utils import chuan_hoa_khoang_trang, loai_bo_html
 

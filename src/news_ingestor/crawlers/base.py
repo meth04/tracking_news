@@ -6,7 +6,6 @@ import logging
 import random
 import time
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import httpx
 
@@ -16,11 +15,27 @@ logger = logging.getLogger(__name__)
 
 # Danh sách User-Agent luân phiên để tránh bị chặn
 DANH_SACH_USER_AGENT = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36",
+    (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Edge/120.0.0.0 Safari/537.36"
+    ),
 ]
 
 
@@ -44,7 +59,7 @@ class BaseCrawler(ABC):
         self._timeout = timeout
         self._so_lan_thu_lai = so_lan_thu_lai
         self._do_tre = do_tre_giua_request
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     def _tao_client(self) -> httpx.Client:
         """Tạo HTTP client với cấu hình phù hợp."""
@@ -62,7 +77,7 @@ class BaseCrawler(ABC):
             )
         return self._client
 
-    def gui_request(self, url: str) -> Optional[str]:
+    def gui_request(self, url: str) -> str | None:
         """Gửi HTTP GET request với retry logic.
 
         Returns:

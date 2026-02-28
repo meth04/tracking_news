@@ -6,39 +6,52 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from sqlalchemy import desc, or_
 
 from news_ingestor.models.article import BaiBao, ThongKeCamXuc
 from news_ingestor.models.enums import CamXuc, DanhMuc
 from news_ingestor.storage.database import BangNhatKy, BangTinTuc, lay_quan_ly_db
+from news_ingestor.utils.metrics import lay_metrics
 
 logger = logging.getLogger(__name__)
+metrics = lay_metrics()
 
 
 class KhoTinTuc:
     """Repository cho bảng tin_tuc_tai_chinh - thao tác CRUD chính."""
 
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: str | None = None):
         self._db = lay_quan_ly_db(database_url)
 
     def luu_bai_bao(self, bai_bao: BaiBao) -> bool:
         """Lưu một bài báo vào database. Trả về True nếu là bài mới."""
         session = self._db.tao_phien()
         try:
-            # Kiểm tra trùng lặp theo URL
-            ton_tai = session.query(BangTinTuc).filter_by(url=bai_bao.url).first()
+            # Kiểm tra trùng lặp theo URL chuẩn hóa hoặc hash tiêu đề
+            ton_tai = (
+                session.query(BangTinTuc)
+                .filter(
+                    or_(
+                        BangTinTuc.url_chuan_hoa == bai_bao.url_chuan_hoa,
+                        BangTinTuc.tieu_de_hash == bai_bao.tieu_de_hash,
+                    )
+                )
+                .first()
+            )
             if ton_tai:
-                logger.debug(f"Bài báo đã tồn tại: {bai_bao.url}")
+                metrics.tang("articles_dedup_skipped")
+                logger.debug(f"Bài báo đã tồn tại (dedup): {bai_bao.url_chuan_hoa}")
                 return False
 
             ban_ghi = BangTinTuc(
                 id=bai_bao.id,
                 tieu_de=bai_bao.tieu_de,
+                tieu_de_hash=bai_bao.tieu_de_hash,
                 noi_dung_tom_tat=bai_bao.noi_dung_tom_tat,
                 noi_dung_goc=bai_bao.noi_dung_goc,
                 url=bai_bao.url,
+                url_chuan_hoa=bai_bao.url_chuan_hoa,
                 nguon_tin=bai_bao.nguon_tin,
                 thoi_gian_xuat_ban=bai_bao.thoi_gian_xuat_ban,
                 danh_muc=str(bai_bao.danh_muc),
@@ -47,16 +60,22 @@ class KhoTinTuc:
                 ),
                 diem_cam_xuc=bai_bao.diem_cam_xuc,
                 nhan_cam_xuc=str(bai_bao.nhan_cam_xuc),
+                impact_score=bai_bao.impact_score,
+                impact_level=bai_bao.impact_level,
+                impact_tags=json.dumps(bai_bao.impact_tags, ensure_ascii=False),
+                is_high_impact=1 if bai_bao.is_high_impact else 0,
                 vector_id=bai_bao.vector_id,
                 trang_thai=str(bai_bao.trang_thai),
                 thoi_gian_tao=bai_bao.thoi_gian_tao,
             )
             session.add(ban_ghi)
             session.commit()
+            metrics.tang("articles_saved")
             logger.info(f"Đã lưu bài báo mới: {bai_bao.tieu_de[:50]}...")
             return True
         except Exception as e:
             session.rollback()
+            metrics.tang("repository_errors")
             logger.error(f"Lỗi khi lưu bài báo: {e}")
             return False
         finally:
@@ -74,8 +93,8 @@ class KhoTinTuc:
     def tim_theo_ma_ck(
         self,
         ma_ck: str,
-        ngay_bat_dau: Optional[datetime] = None,
-        ngay_ket_thuc: Optional[datetime] = None,
+        ngay_bat_dau: datetime | None = None,
+        ngay_ket_thuc: datetime | None = None,
         gioi_han: int = 50,
     ) -> list[BaiBao]:
         """Tìm tin tức theo mã chứng khoán và khoảng thời gian."""
@@ -101,8 +120,8 @@ class KhoTinTuc:
 
     def tim_tin_vi_mo(
         self,
-        khung_thoi_gian: Optional[str] = None,
-        chu_de: Optional[str] = None,
+        khung_thoi_gian: str | None = None,
+        chu_de: str | None = None,
         gioi_han: int = 50,
     ) -> list[BaiBao]:
         """Tìm tin tức vĩ mô theo thời gian và chủ đề."""
@@ -140,7 +159,7 @@ class KhoTinTuc:
 
     def lay_cam_xuc_thi_truong(
         self,
-        ma_ck: Optional[str] = None,
+        ma_ck: str | None = None,
         so_ngay: int = 7,
     ) -> ThongKeCamXuc:
         """Tổng hợp thống kê cảm xúc cho một mã CK hoặc toàn thị trường."""
@@ -215,6 +234,23 @@ class KhoTinTuc:
         finally:
             session.close()
 
+    def lay_tin_tac_dong_cao(self, so_ngay: int = 3, gioi_han: int = 20) -> list[BaiBao]:
+        """Lấy danh sách tin tác động cao gần đây."""
+        session = self._db.tao_phien()
+        try:
+            ngay_bat_dau = datetime.now(tz=timezone.utc) - timedelta(days=so_ngay)
+            ket_qua = (
+                session.query(BangTinTuc)
+                .filter(BangTinTuc.thoi_gian_xuat_ban >= ngay_bat_dau)
+                .filter(BangTinTuc.is_high_impact == 1)
+                .order_by(desc(BangTinTuc.impact_score), desc(BangTinTuc.thoi_gian_xuat_ban))
+                .limit(gioi_han)
+                .all()
+            )
+            return [self._chuyen_doi(r) for r in ket_qua]
+        finally:
+            session.close()
+
     def dem_bai_bao(self) -> int:
         """Đếm tổng số bài báo trong database."""
         session = self._db.tao_phien()
@@ -252,7 +288,7 @@ class KhoTinTuc:
         so_bai_thu_thap: int = 0,
         so_bai_moi: int = 0,
         trang_thai: str = "SUCCESS",
-        loi: Optional[str] = None,
+        loi: str | None = None,
     ) -> None:
         """Cập nhật nhật ký thu thập khi hoàn thành."""
         session = self._db.tao_phien()
@@ -282,25 +318,42 @@ class KhoTinTuc:
             except (json.JSONDecodeError, TypeError):
                 ma_ck = []
 
+        impact_tags = []
+        if ban_ghi.impact_tags:
+            try:
+                impact_tags = json.loads(ban_ghi.impact_tags)
+            except (json.JSONDecodeError, TypeError):
+                impact_tags = []
+
         return BaiBao(
             id=ban_ghi.id,
             tieu_de=ban_ghi.tieu_de,
+            tieu_de_hash=ban_ghi.tieu_de_hash or "",
             noi_dung_tom_tat=ban_ghi.noi_dung_tom_tat or "",
             noi_dung_goc=ban_ghi.noi_dung_goc or "",
             url=ban_ghi.url,
+            url_chuan_hoa=ban_ghi.url_chuan_hoa or "",
             nguon_tin=ban_ghi.nguon_tin,
             thoi_gian_xuat_ban=ban_ghi.thoi_gian_xuat_ban,
             danh_muc=DanhMuc(ban_ghi.danh_muc) if ban_ghi.danh_muc else DanhMuc.VI_MO,
             ma_chung_khoan_lien_quan=ma_ck,
             diem_cam_xuc=ban_ghi.diem_cam_xuc or 0.0,
-            nhan_cam_xuc=CamXuc(ban_ghi.nhan_cam_xuc) if ban_ghi.nhan_cam_xuc else CamXuc.TRUNG_TINH,
+            nhan_cam_xuc=(
+                CamXuc(ban_ghi.nhan_cam_xuc)
+                if ban_ghi.nhan_cam_xuc
+                else CamXuc.TRUNG_TINH
+            ),
+            impact_score=ban_ghi.impact_score or 0,
+            impact_level=ban_ghi.impact_level or "LOW",
+            impact_tags=impact_tags,
+            is_high_impact=bool(ban_ghi.is_high_impact),
             vector_id=ban_ghi.vector_id,
             trang_thai=ban_ghi.trang_thai,
             thoi_gian_tao=ban_ghi.thoi_gian_tao,
         )
 
     @staticmethod
-    def _phan_tich_khung_thoi_gian(khung: str) -> Optional[datetime]:
+    def _phan_tich_khung_thoi_gian(khung: str) -> datetime | None:
         """Phân tích chuỗi khung thời gian thành datetime.
 
         Hỗ trợ: '1d' (1 ngày), '7d' (7 ngày), '1w' (1 tuần),

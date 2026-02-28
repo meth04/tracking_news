@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 from bs4 import BeautifulSoup
 
@@ -89,7 +88,7 @@ class VietStockCrawler(BaseCrawler):
 
     def _phan_tich_bai_viet(
         self, element: BeautifulSoup, ten_nguon: str
-    ) -> Optional[BaiBaoTho]:
+    ) -> BaiBaoTho | None:
         """Phân tích element HTML VietStock."""
         tieu_de_el = element.select_one("h3 a, h2 a, a.title, a[title]")
         if not tieu_de_el:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Optional
 
 from config.settings import lay_cau_hinh_qdrant
 
@@ -17,7 +16,7 @@ class KhoVector:
     Tự động fallback sang chế độ in-memory nếu không kết nối được Qdrant.
     """
 
-    def __init__(self, url: Optional[str] = None, ten_collection: Optional[str] = None):
+    def __init__(self, url: str | None = None, ten_collection: str | None = None):
         cau_hinh = lay_cau_hinh_qdrant()
         self._url = url or cau_hinh.url
         self._ten_collection = ten_collection or cau_hinh.ten_collection
@@ -63,7 +62,7 @@ class KhoVector:
         self,
         vector: list[float],
         metadata: dict,
-        vector_id: Optional[str] = None,
+        vector_id: str | None = None,
     ) -> str:
         """Lưu một vector embedding cùng metadata. Trả về vector_id."""
         if vector_id is None:
@@ -165,7 +164,7 @@ class KhoVector:
         if len(vec_a) != len(vec_b):
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
+        dot_product = sum(a * b for a, b in zip(vec_a, vec_b, strict=False))
         norm_a = sum(a * a for a in vec_a) ** 0.5
         norm_b = sum(b * b for b in vec_b) ** 0.5
 

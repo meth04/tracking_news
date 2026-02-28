@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from config.settings import lay_cau_hinh_nlp
 
@@ -17,7 +16,7 @@ class BoTaoEmbeddings:
     (hỗ trợ 50+ ngôn ngữ bao gồm tiếng Việt)
     """
 
-    def __init__(self, ten_model: Optional[str] = None):
+    def __init__(self, ten_model: str | None = None):
         cau_hinh = lay_cau_hinh_nlp()
         self._ten_model = ten_model or cau_hinh.embedding_model
         self._model = None

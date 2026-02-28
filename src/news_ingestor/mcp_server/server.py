@@ -9,28 +9,28 @@ Cung cấp 4 tools qua giao thức MCP:
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
-from typing import Optional
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from news_ingestor.processing.embeddings import BoTaoEmbeddings
 from news_ingestor.storage.repository import KhoTinTuc
 from news_ingestor.storage.vector_store import KhoVector
-from news_ingestor.processing.embeddings import BoTaoEmbeddings
+from news_ingestor.utils.metrics import lay_metrics
 
 logger = logging.getLogger(__name__)
+metrics = lay_metrics()
 
 # Khởi tạo MCP Server
 server = Server("tin-tuc-tai-chinh")
 
 # Storage instances (khởi tạo lazy)
-_kho_tin_tuc: Optional[KhoTinTuc] = None
-_kho_vector: Optional[KhoVector] = None
-_bo_embedding: Optional[BoTaoEmbeddings] = None
+_kho_tin_tuc: KhoTinTuc | None = None
+_kho_vector: KhoVector | None = None
+_bo_embedding: BoTaoEmbeddings | None = None
 
 
 def _lay_kho_tin_tuc() -> KhoTinTuc:
@@ -105,7 +105,10 @@ async def danh_sach_tools() -> list[Tool]:
                     },
                     "ngay_bat_dau": {
                         "type": "string",
-                        "description": "Ngày bắt đầu (ISO format: YYYY-MM-DD). Mặc định: 7 ngày trước",
+                        "description": (
+                            "Ngày bắt đầu (ISO format: YYYY-MM-DD). "
+                            "Mặc định: 7 ngày trước"
+                        ),
                         "default": "",
                     },
                     "ngay_ket_thuc": {
@@ -168,6 +171,17 @@ async def danh_sach_tools() -> list[Tool]:
                 },
             },
         ),
+        Tool(
+            name="lay_metrics",
+            description=(
+                "Lấy metrics vận hành nội bộ của tiến trình (counters + started_at). "
+                "Dùng cho monitoring và debugging."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
     ]
 
 
@@ -178,6 +192,8 @@ async def danh_sach_tools() -> list[Tool]:
 @server.call_tool()
 async def goi_tool(name: str, arguments: dict) -> list[TextContent]:
     """Xử lý lời gọi tool từ AI Agent."""
+    metrics.tang("mcp_calls_total")
+
     try:
         if name == "tim_tin_vi_mo":
             return await _xu_ly_tim_tin_vi_mo(arguments)
@@ -187,17 +203,28 @@ async def goi_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _xu_ly_tim_kiem_ngu_nghia(arguments)
         elif name == "lay_cam_xuc_thi_truong":
             return await _xu_ly_lay_cam_xuc(arguments)
+        elif name == "lay_metrics":
+            return await _xu_ly_lay_metrics()
         else:
-            return [TextContent(
-                type="text",
-                text=f"Lỗi: Tool '{name}' không tồn tại.",
-            )]
+            metrics.tang("mcp_calls_failed")
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Lỗi: Tool '{name}' không tồn tại.",
+                )
+            ]
     except Exception as e:
+        metrics.tang("mcp_calls_failed")
         logger.error(f"Lỗi xử lý tool {name}: {e}", exc_info=True)
-        return [TextContent(
-            type="text",
-            text=f"Lỗi khi thực thi tool '{name}': {str(e)}",
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"Lỗi khi thực thi tool '{name}': {str(e)}. "
+                    "Vui lòng kiểm tra cấu hình và thử lại."
+                ),
+            )
+        ]
 
 
 async def _xu_ly_tim_tin_vi_mo(args: dict) -> list[TextContent]:
@@ -222,7 +249,11 @@ async def _xu_ly_tim_tin_vi_mo(args: dict) -> list[TextContent]:
     # Format kết quả
     output_lines = [f"📊 TIN TỨC VĨ MÔ ({len(ket_qua)} kết quả)\n"]
     for i, bai in enumerate(ket_qua, 1):
-        cam_xuc_icon = "🟢" if bai.diem_cam_xuc > 0.1 else ("🔴" if bai.diem_cam_xuc < -0.1 else "⚪")
+        cam_xuc_icon = (
+            "🟢"
+            if bai.diem_cam_xuc > 0.1
+            else ("🔴" if bai.diem_cam_xuc < -0.1 else "⚪")
+        )
         output_lines.append(
             f"{i}. {cam_xuc_icon} [{bai.nguon_tin}] {bai.tieu_de}\n"
             f"   📅 {bai.thoi_gian_xuat_ban.strftime('%d/%m/%Y %H:%M')}\n"
@@ -270,7 +301,11 @@ async def _xu_ly_lay_tin_doanh_nghiep(args: dict) -> list[TextContent]:
     ]
 
     for i, bai in enumerate(ket_qua, 1):
-        cam_xuc_icon = "🟢" if bai.diem_cam_xuc > 0.1 else ("🔴" if bai.diem_cam_xuc < -0.1 else "⚪")
+        cam_xuc_icon = (
+            "🟢"
+            if bai.diem_cam_xuc > 0.1
+            else ("🔴" if bai.diem_cam_xuc < -0.1 else "⚪")
+        )
         output_lines.append(
             f"{i}. {cam_xuc_icon} {bai.tieu_de}\n"
             f"   📅 {bai.thoi_gian_xuat_ban.strftime('%d/%m/%Y')} | "
@@ -324,6 +359,21 @@ async def _xu_ly_tim_kiem_ngu_nghia(args: dict) -> list[TextContent]:
             text=f"Lỗi tìm kiếm ngữ nghĩa: {str(e)}. "
                  "Kiểm tra model embedding và Vector DB.",
         )]
+
+
+async def _xu_ly_lay_metrics() -> list[TextContent]:
+    """Xử lý tool lấy metrics tiến trình."""
+    snapshot = metrics.snapshot()
+    output = ["📈 METRICS SNAPSHOT", "─" * 40, f"started_at: {snapshot['started_at']}"]
+
+    counters = snapshot.get("counters", {})
+    if not counters:
+        output.append("(chưa có metrics)")
+    else:
+        for ten, gia_tri in sorted(counters.items()):
+            output.append(f"- {ten}: {gia_tri}")
+
+    return [TextContent(type="text", text="\n".join(output))]
 
 
 async def _xu_ly_lay_cam_xuc(args: dict) -> list[TextContent]:

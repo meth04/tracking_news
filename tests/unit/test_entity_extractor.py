@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from news_ingestor.models.enums import DanhMuc
 from news_ingestor.processing.entity_extractor import BoTrichXuatThucThe
 

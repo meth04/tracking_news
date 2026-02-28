@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 from bs4 import BeautifulSoup
 
@@ -89,7 +88,7 @@ class VnExpressCrawler(BaseCrawler):
 
     def _phan_tich_bai_viet(
         self, element: BeautifulSoup, ten_nguon: str
-    ) -> Optional[BaiBaoTho]:
+    ) -> BaiBaoTho | None:
         """Phân tích element HTML VnExpress thành BaiBaoTho."""
         # Tiêu đề
         tieu_de_el = element.select_one("h3.title-news a, h2.title-news a, a.title-news")

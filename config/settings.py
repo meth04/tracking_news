@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
-from pydantic import Field
-
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Thư mục gốc dự án
 THU_MUC_GOC = Path(__file__).resolve().parent.parent
@@ -22,9 +20,21 @@ class CauHinhDatabase(BaseSettings):
         description="Chuỗi kết nối database (PostgreSQL hoặc SQLite)",
     )
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    @field_validator("url")
+    @classmethod
+    def _kiem_tra_database_url(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("DATABASE_URL không được để trống")
+        if not (
+            value.startswith("sqlite+")
+            or value.startswith("postgresql+")
+            or value.startswith("postgresql://")
+        ):
+            raise ValueError("DATABASE_URL phải là sqlite hoặc postgresql")
+        return value
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 class CauHinhQdrant(BaseSettings):
@@ -41,9 +51,23 @@ class CauHinhQdrant(BaseSettings):
         description="Tên collection trong Qdrant",
     )
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    @field_validator("url")
+    @classmethod
+    def _kiem_tra_qdrant_url(cls, value: str) -> str:
+        value = value.strip()
+        if not (value.startswith("http://") or value.startswith("https://")):
+            raise ValueError("QDRANT_URL phải bắt đầu bằng http:// hoặc https://")
+        return value
+
+    @field_validator("ten_collection")
+    @classmethod
+    def _kiem_tra_collection(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("QDRANT_COLLECTION không được để trống")
+        return value
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 class CauHinhNLP(BaseSettings):
@@ -60,9 +84,20 @@ class CauHinhNLP(BaseSettings):
         description="Tên model sentence-transformers",
     )
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    @field_validator("gemini_api_key")
+    @classmethod
+    def _chuan_hoa_api_key(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("embedding_model")
+    @classmethod
+    def _kiem_tra_embedding_model(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("EMBEDDING_MODEL không được để trống")
+        return value
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 class CauHinhCrawler(BaseSettings):
@@ -72,26 +107,42 @@ class CauHinhCrawler(BaseSettings):
         default=15,
         alias="CRAWL_INTERVAL_MINUTES",
         description="Khoảng cách giữa các lần thu thập (phút)",
+        ge=1,
+        le=1440,
     )
     timeout_giay: int = Field(
         default=30,
         alias="REQUEST_TIMEOUT",
         description="Timeout cho mỗi request HTTP (giây)",
+        ge=5,
+        le=300,
     )
     so_lan_thu_lai: int = Field(
         default=3,
         alias="MAX_RETRIES",
         description="Số lần thử lại khi request thất bại",
+        ge=0,
+        le=10,
     )
     user_agent: str = Field(
-        default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        default=(
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
         alias="USER_AGENT",
         description="User-Agent header cho HTTP requests",
     )
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    @field_validator("user_agent")
+    @classmethod
+    def _kiem_tra_user_agent(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("USER_AGENT không được để trống")
+        return value
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 class CauHinhHeThong(BaseSettings):
@@ -102,10 +153,42 @@ class CauHinhHeThong(BaseSettings):
         alias="LOG_LEVEL",
         description="Cấp độ log (DEBUG, INFO, WARNING, ERROR)",
     )
+    telemetry_enabled: bool = Field(
+        default=True,
+        alias="METRICS_ENABLED",
+        description="Bật ghi nhận metrics trong process",
+    )
+    telegram_alert_enabled: bool = Field(
+        default=False,
+        alias="TELEGRAM_ALERT_ENABLED",
+        description="Bật/tắt gửi cảnh báo Telegram",
+    )
+    telegram_bot_token: str = Field(
+        default="",
+        alias="TELEGRAM_BOT_TOKEN",
+        description="Telegram bot token",
+    )
+    telegram_chat_id: str = Field(
+        default="",
+        alias="TELEGRAM_CHAT_ID",
+        description="Telegram chat id nhận cảnh báo",
+    )
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    @field_validator("log_level")
+    @classmethod
+    def _kiem_tra_log_level(cls, value: str) -> str:
+        value = value.strip().upper()
+        hop_le = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if value not in hop_le:
+            raise ValueError(f"LOG_LEVEL không hợp lệ: {value}")
+        return value
+
+    @field_validator("telegram_bot_token", "telegram_chat_id")
+    @classmethod
+    def _chuan_hoa_telegram_fields(cls, value: str) -> str:
+        return value.strip()
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 # Singleton instances
@@ -153,4 +236,12 @@ def lay_cau_hinh_he_thong() -> CauHinhHeThong:
     global _he_thong
     if _he_thong is None:
         _he_thong = CauHinhHeThong()
+
+        if _he_thong.telegram_alert_enabled and (
+            not _he_thong.telegram_bot_token or not _he_thong.telegram_chat_id
+        ):
+            raise ValueError(
+                "TELEGRAM_ALERT_ENABLED=true nhưng thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID"
+            )
+
     return _he_thong

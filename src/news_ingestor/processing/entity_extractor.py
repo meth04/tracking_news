@@ -6,7 +6,6 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Optional
 
 from news_ingestor.models.enums import DanhMuc
 from news_ingestor.utils.text_utils import bo_dau
@@ -81,7 +80,7 @@ class BoTrichXuatThucThe:
 
         return sorted(ma_tim_thay)
 
-    def phan_loai_danh_muc(self, text: str, ma_ck_da_tim: Optional[list[str]] = None) -> DanhMuc:
+    def phan_loai_danh_muc(self, text: str, ma_ck_da_tim: list[str] | None = None) -> DanhMuc:
         """Phân loại bài báo vào danh mục: MACRO, MICRO, hoặc INDUSTRY.
 
         Logic phân loại:
@@ -99,7 +98,7 @@ class BoTrichXuatThucThe:
 
         # Kiểm tra từ khóa ngành
         diem_nganh = 0
-        for nganh, tu_khoa_list in self._tu_khoa_nganh.items():
+        for _nganh, tu_khoa_list in self._tu_khoa_nganh.items():
             for tk in tu_khoa_list:
                 if tk.lower() in text_lower or bo_dau(tk.lower()) in text_no_dau:
                     diem_nganh += 1

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from news_ingestor.models.enums import CamXuc
 from news_ingestor.utils.text_utils import bo_dau
@@ -61,7 +60,7 @@ class BoPhanTichCamXuc:
     2. Keyword-based (fallback, hoạt động offline)
     """
 
-    def __init__(self, gemini_api_key: Optional[str] = None):
+    def __init__(self, gemini_api_key: str | None = None):
         self._gemini_key = gemini_api_key
         self._gemini_client = None
 
@@ -101,7 +100,7 @@ class BoPhanTichCamXuc:
         # Fallback: keyword-based
         return self._phan_tich_keyword(text)
 
-    def _phan_tich_gemini(self, text: str) -> Optional[dict]:
+    def _phan_tich_gemini(self, text: str) -> dict | None:
         """Phân tích cảm xúc bằng Gemini AI."""
         try:
             prompt = f"""Bạn là chuyên gia phân tích cảm xúc tin tức tài chính Việt Nam.
@@ -125,7 +124,7 @@ Bài báo:
             logger.debug(f"Gemini sentiment lỗi: {e}")
             return None
 
-    def _parse_gemini_response(self, response_text: str) -> Optional[dict]:
+    def _parse_gemini_response(self, response_text: str) -> dict | None:
         """Parse kết quả từ Gemini response."""
         try:
             lines = response_text.strip().split("\n")

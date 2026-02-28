@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    Index,
     Integer,
     String,
     Text,
@@ -32,18 +32,27 @@ class BangTinTuc(Base):
     """ORM model cho bảng tin_tuc_tai_chinh."""
 
     __tablename__ = "tin_tuc_tai_chinh"
+    __table_args__ = (
+        Index("ix_tin_tuc_tieu_de_hash", "tieu_de_hash"),
+    )
 
     id = Column(String(36), primary_key=True)
     tieu_de = Column(String(500), nullable=False)
+    tieu_de_hash = Column(String(64), nullable=False, default="")
     noi_dung_tom_tat = Column(Text, default="")
     noi_dung_goc = Column(Text, default="")
-    url = Column(String(2000), nullable=False, unique=True)
+    url = Column(String(2000), nullable=False)
+    url_chuan_hoa = Column(String(2000), nullable=False, unique=True)
     nguon_tin = Column(String(100), nullable=False)
     thoi_gian_xuat_ban = Column(DateTime(timezone=True), nullable=False)
     danh_muc = Column(String(20), nullable=False, default="MACRO")
     ma_chung_khoan_lien_quan = Column(Text, default="")  # JSON string cho SQLite
     diem_cam_xuc = Column(Float, default=0.0)
     nhan_cam_xuc = Column(String(20), default="NEUTRAL")
+    impact_score = Column(Integer, default=0)
+    impact_level = Column(String(20), default="LOW", index=True)
+    impact_tags = Column(Text, default="")
+    is_high_impact = Column(Integer, default=0, index=True)
     vector_id = Column(String(36), nullable=True)
     trang_thai = Column(String(20), default="PENDING")
     thoi_gian_tao = Column(DateTime(timezone=True))
@@ -67,7 +76,7 @@ class BangNhatKy(Base):
 class QuanLyDatabase:
     """Quản lý kết nối và phiên làm việc với database."""
 
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: str | None = None):
         if database_url is None:
             cau_hinh = lay_cau_hinh_database()
             database_url = cau_hinh.url
@@ -91,15 +100,54 @@ class QuanLyDatabase:
             pool_pre_ping=True if "postgresql" in sync_url else False,
         )
         self._session_factory = sessionmaker(bind=self._engine)
+        url_an_toan = sync_url.split("@")[-1] if "@" in sync_url else sync_url
         logger.info(
             "Kết nối database thành công",
-            extra={"extra_fields": {"url": sync_url.split("@")[-1] if "@" in sync_url else sync_url}},
+            extra={"extra_fields": {"url": url_an_toan}},
         )
 
     def khoi_tao_bang(self) -> None:
-        """Tạo tất cả bảng nếu chưa tồn tại."""
+        """Tạo bảng và bổ sung các cột mới còn thiếu (SQLite)."""
         Base.metadata.create_all(self._engine)
+
+        # Lightweight migration cho SQLite cũ (không dùng Alembic)
+        self._bo_sung_cot_thieu_sqlite()
+
         logger.info("Đã khởi tạo cấu trúc database")
+
+    def _bo_sung_cot_thieu_sqlite(self) -> None:
+        """Thêm cột còn thiếu cho bảng tin_tuc_tai_chinh khi chạy trên SQLite cũ."""
+        dialect = self._engine.url.get_backend_name()
+        if dialect != "sqlite":
+            return
+
+        cot_mong_doi: dict[str, str] = {
+            "tieu_de_hash": "TEXT NOT NULL DEFAULT ''",
+            "url_chuan_hoa": "TEXT NOT NULL DEFAULT ''",
+            "impact_score": "INTEGER DEFAULT 0",
+            "impact_level": "TEXT DEFAULT 'LOW'",
+            "impact_tags": "TEXT DEFAULT ''",
+            "is_high_impact": "INTEGER DEFAULT 0",
+        }
+
+        with self._engine.begin() as conn:
+            thong_tin_cot = conn.execute(text("PRAGMA table_info('tin_tuc_tai_chinh')")).fetchall()
+            cot_hien_tai = {row[1] for row in thong_tin_cot}
+
+            for ten_cot, cau_hinh in cot_mong_doi.items():
+                if ten_cot in cot_hien_tai:
+                    continue
+                conn.execute(text(f"ALTER TABLE tin_tuc_tai_chinh ADD COLUMN {ten_cot} {cau_hinh}"))
+                logger.info(f"Đã thêm cột mới cho SQLite: {ten_cot}")
+
+            # Đồng bộ giá trị url_chuan_hoa cho dữ liệu cũ nếu đang để rỗng
+            conn.execute(
+                text(
+                    "UPDATE tin_tuc_tai_chinh "
+                    "SET url_chuan_hoa = url "
+                    "WHERE (url_chuan_hoa IS NULL OR url_chuan_hoa = '') AND url IS NOT NULL"
+                )
+            )
 
     def tao_phien(self) -> Session:
         """Tạo một phiên làm việc mới."""
@@ -112,10 +160,10 @@ class QuanLyDatabase:
 
 
 # Singleton instance
-_quan_ly: Optional[QuanLyDatabase] = None
+_quan_ly: QuanLyDatabase | None = None
 
 
-def lay_quan_ly_db(database_url: Optional[str] = None) -> QuanLyDatabase:
+def lay_quan_ly_db(database_url: str | None = None) -> QuanLyDatabase:
     """Lấy hoặc tạo QuanLyDatabase singleton."""
     global _quan_ly
     if _quan_ly is None:

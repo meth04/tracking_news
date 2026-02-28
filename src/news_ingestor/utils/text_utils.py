@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 def bo_dau(text: str) -> str:
@@ -42,3 +44,58 @@ def kiem_tra_tieng_viet(text: str) -> bool:
     """Kiểm tra xem chuỗi có chứa ký tự tiếng Việt không."""
     viet_chars = "àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ"
     return any(ch in viet_chars for ch in text.lower())
+
+
+def chuan_hoa_url(url: str) -> str:
+    """Chuẩn hóa URL để hỗ trợ so khớp trùng lặp ổn định."""
+    if not url:
+        return ""
+
+    url = url.strip()
+    if not url:
+        return ""
+
+    try:
+        parsed = urlsplit(url)
+    except Exception:
+        return url
+
+    scheme = (parsed.scheme or "https").lower()
+    netloc = parsed.netloc.lower()
+
+    if netloc.endswith(":80") and scheme == "http":
+        netloc = netloc[:-3]
+    elif netloc.endswith(":443") and scheme == "https":
+        netloc = netloc[:-4]
+
+    path = parsed.path or "/"
+    if path != "/":
+        path = path.rstrip("/")
+
+    bo_qua_params = {
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "utm_id",
+        "gclid",
+        "fbclid",
+        "mc_cid",
+        "mc_eid",
+    }
+
+    query_pairs = [
+        (k, v)
+        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+        if k.lower() not in bo_qua_params
+    ]
+    query = urlencode(sorted(query_pairs), doseq=True)
+
+    return urlunsplit((scheme, netloc, path, query, ""))
+
+
+def tao_hash_tieu_de(tieu_de: str) -> str:
+    """Tạo hash tiêu đề sau chuẩn hóa nhẹ để hỗ trợ dedup."""
+    tieu_de_chuan = chuan_hoa_khoang_trang((tieu_de or "").lower())
+    return hashlib.sha256(tieu_de_chuan.encode("utf-8")).hexdigest()

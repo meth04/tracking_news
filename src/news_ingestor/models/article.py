@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from news_ingestor.models.enums import CamXuc, DanhMuc, TrangThai
+from news_ingestor.utils.text_utils import chuan_hoa_url, tao_hash_tieu_de
 
 
 class BaiBaoTho(BaseModel):
@@ -17,11 +17,19 @@ class BaiBaoTho(BaseModel):
     tieu_de: str = Field(..., description="Tiêu đề bài báo")
     noi_dung: str = Field(default="", description="Nội dung đầy đủ hoặc tóm tắt")
     url: str = Field(..., description="Đường dẫn gốc bài báo")
+    url_chuan_hoa: str = Field(default="", description="URL đã chuẩn hóa để dedup")
+    tieu_de_hash: str = Field(default="", description="SHA-256 của tiêu đề chuẩn hóa")
     nguon_tin: str = Field(..., description="Tên nguồn tin (VD: CafeF, VnExpress)")
     thoi_gian_xuat_ban: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc),
         description="Thời gian xuất bản bài báo",
     )
+
+    @model_validator(mode="after")
+    def _bo_sung_truong_dedup(self) -> BaiBaoTho:
+        self.url_chuan_hoa = chuan_hoa_url(self.url)
+        self.tieu_de_hash = tao_hash_tieu_de(self.tieu_de)
+        return self
 
 
 class BaiBao(BaseModel):
@@ -32,9 +40,11 @@ class BaiBao(BaseModel):
         description="Mã định danh duy nhất (UUID)",
     )
     tieu_de: str = Field(..., description="Tiêu đề bài báo")
+    tieu_de_hash: str = Field(default="", description="SHA-256 của tiêu đề chuẩn hóa")
     noi_dung_tom_tat: str = Field(default="", description="Tóm tắt nội dung")
     noi_dung_goc: str = Field(default="", description="Nội dung gốc đầy đủ")
     url: str = Field(..., description="Đường dẫn gốc bài báo")
+    url_chuan_hoa: str = Field(default="", description="URL đã chuẩn hóa để dedup")
     nguon_tin: str = Field(..., description="Tên nguồn tin")
     thoi_gian_xuat_ban: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc),
@@ -58,7 +68,11 @@ class BaiBao(BaseModel):
         default=CamXuc.TRUNG_TINH,
         description="Nhãn cảm xúc: POSITIVE / NEGATIVE / NEUTRAL",
     )
-    vector_id: Optional[str] = Field(
+    impact_score: int = Field(default=0, description="Điểm tác động đến tài chính Việt Nam")
+    impact_level: str = Field(default="LOW", description="Mức tác động: LOW/MEDIUM/HIGH")
+    impact_tags: list[str] = Field(default_factory=list, description="Danh sách tag tác động")
+    is_high_impact: bool = Field(default=False, description="Đánh dấu tin tác động cao")
+    vector_id: str | None = Field(
         default=None,
         description="Khóa ngoại liên kết tới Vector DB",
     )
@@ -70,6 +84,12 @@ class BaiBao(BaseModel):
         default_factory=lambda: datetime.now(tz=timezone.utc),
         description="Thời gian tạo bản ghi",
     )
+
+    @model_validator(mode="after")
+    def _bo_sung_truong_dedup(self) -> BaiBao:
+        self.url_chuan_hoa = chuan_hoa_url(self.url)
+        self.tieu_de_hash = tao_hash_tieu_de(self.tieu_de)
+        return self
 
     class Config:
         json_encoders = {

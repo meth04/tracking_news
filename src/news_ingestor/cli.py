@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -22,8 +25,57 @@ def cli(ctx: click.Context, log_level: str, json_log: bool) -> None:
     Tự động thu thập, phân tích cảm xúc, và phục vụ tin tức qua MCP Server.
     """
     from news_ingestor.utils.logging_config import cau_hinh_logging
+
     cau_hinh_logging(cap_do=log_level, json_mode=json_log)
     ctx.ensure_object(dict)
+
+
+def _tim_cong_trong() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+@cli.command("demo")
+def chay_demo() -> None:
+    """🚀 Chạy dashboard demo trên cổng trống tự động."""
+    dashboard_path = Path(__file__).resolve().parent.parent.parent / "dashboard.py"
+
+    if not dashboard_path.exists():
+        raise click.ClickException("Không tìm thấy dashboard.py ở thư mục gốc dự án.")
+
+    if importlib.util.find_spec("streamlit") is None:
+        raise click.ClickException(
+            "Thiếu dependency 'streamlit'. Cài bằng: pip install streamlit"
+        )
+
+    cong = _tim_cong_trong()
+    url = f"http://127.0.0.1:{cong}"
+
+    click.echo(f"🚀 Demo dashboard đang chạy tại: {url}")
+    click.echo("   Nhấn Ctrl+C để dừng")
+
+    ket_qua = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(dashboard_path),
+            "--server.address",
+            "127.0.0.1",
+            "--server.port",
+            str(cong),
+            "--server.headless",
+            "true",
+        ],
+        check=False,
+    )
+
+    if ket_qua.returncode not in {0, 130}:
+        raise click.ClickException(
+            f"Dashboard thoát với mã lỗi {ket_qua.returncode}."
+        )
 
 
 @cli.command("init-db")
@@ -60,6 +112,8 @@ def thu_thap(once: bool, daemon: bool, interval: int, skip_nlp: bool, no_embeddi
     Mặc định chạy một lần. Dùng --daemon để chạy liên tục.
     """
     import logging
+
+    from config.settings import lay_cau_hinh_he_thong
     from news_ingestor.crawlers.scheduler import BoLichThuThap
     from news_ingestor.storage.database import lay_quan_ly_db
 
@@ -87,10 +141,28 @@ def thu_thap(once: bool, daemon: bool, interval: int, skip_nlp: bool, no_embeddi
             except Exception as e:
                 logger.warning(f"Không thể kết nối Vector DB: {e}")
 
+        cau_hinh_he_thong = lay_cau_hinh_he_thong()
+
+        bo_canh_bao = None
+        if cau_hinh_he_thong.telegram_alert_enabled:
+            from news_ingestor.utils.alerting import tao_bo_canh_bao_tu_env
+
+            bo_canh_bao = tao_bo_canh_bao_tu_env(
+                telegram_enabled=cau_hinh_he_thong.telegram_alert_enabled,
+                telegram_bot_token=cau_hinh_he_thong.telegram_bot_token,
+                telegram_chat_id=cau_hinh_he_thong.telegram_chat_id,
+            )
+            if bo_canh_bao is None:
+                logger.warning(
+                    "TELEGRAM_ALERT_ENABLED=true nhưng thiếu "
+                    "TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID"
+                )
+
         pipeline = LuongXuLy(
             kho_tin_tuc=KhoTinTuc(),
             kho_vector=kho_vector,
             tao_embedding=not no_embedding and kho_vector is not None,
+            bo_canh_bao=bo_canh_bao,
         )
 
         def callback(danh_sach_bai):
@@ -117,10 +189,42 @@ def phuc_vu_mcp() -> None:
     Server chạy qua stdio protocol.
     """
     click.echo("🌐 Đang khởi động MCP Server: tin-tuc-tai-chinh...")
-    click.echo("   Tools: tim_tin_vi_mo, lay_tin_doanh_nghiep, tim_kiem_ngu_nghia, lay_cam_xuc_thi_truong")
+    click.echo(
+        "   Tools: tim_tin_vi_mo, lay_tin_doanh_nghiep, tim_kiem_ngu_nghia, "
+        "lay_cam_xuc_thi_truong, lay_metrics"
+    )
 
     from news_ingestor.mcp_server.server import chay_server
     asyncio.run(chay_server())
+
+
+@cli.command("high-impact")
+@click.option("--days", type=int, default=3, help="Số ngày gần nhất")
+@click.option("--limit", type=int, default=20, help="Số lượng kết quả tối đa")
+def tin_tac_dong_cao(days: int, limit: int) -> None:
+    """📣 Hiển thị các tin có tác động cao đến tài chính Việt Nam."""
+    from news_ingestor.storage.database import lay_quan_ly_db
+    from news_ingestor.storage.repository import KhoTinTuc
+
+    db = lay_quan_ly_db()
+    db.khoi_tao_bang()
+
+    kho = KhoTinTuc()
+    ket_qua = kho.lay_tin_tac_dong_cao(so_ngay=days, gioi_han=limit)
+
+    if not ket_qua:
+        click.echo(f"Không có tin tác động cao trong {days} ngày gần nhất.")
+        return
+
+    click.echo(f"📣 TIN TÁC ĐỘNG CAO ({len(ket_qua)} kết quả, {days} ngày gần nhất)")
+    for i, bai in enumerate(ket_qua, 1):
+        tags = ", ".join(bai.impact_tags[:4]) if bai.impact_tags else "-"
+        click.echo(
+            f"{i}. [{bai.impact_level}] score={bai.impact_score} | {bai.tieu_de}\n"
+            f"   {bai.nguon_tin} | {bai.thoi_gian_xuat_ban.strftime('%Y-%m-%d %H:%M')}\n"
+            f"   Tags: {tags}\n"
+            f"   URL: {bai.url}\n"
+        )
 
 
 @cli.command("stats")

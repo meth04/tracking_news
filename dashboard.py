@@ -1,25 +1,27 @@
 """
-🗞️ Dashboard Tin tức Tài chính Việt Nam — Professional Edition
+🗞️ Dashboard Tin tức Tài chính Việt Nam — Professional Edition.
+
 Multi-page dashboard for debugging and monitoring the news ingestion pipeline.
 Chạy: streamlit run dashboard.py
 """
 
-import sys
-from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
+from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 # ============================================
 # PAGE CONFIG
@@ -221,7 +223,14 @@ with st.sidebar:
     st.markdown("## 🗞️ News Pipeline")
     page = st.radio(
         "Trang",
-        ["📊 Tổng quan", "📋 Danh sách tin", "🔍 Chi tiết bài báo", "🩺 Chẩn đoán Pipeline", "📡 Nguồn & Crawl"],
+        [
+            "📅 Tổng hợp ngày",
+            "📊 Tổng quan",
+            "📋 Danh sách tin",
+            "🔍 Chi tiết bài báo",
+            "🩺 Chẩn đoán Pipeline",
+            "📡 Nguồn & Crawl",
+        ],
         label_visibility="collapsed",
     )
 
@@ -267,10 +276,154 @@ if search_q:
 
 
 # ============================================
+# PAGE: TỔNG HỢP NGÀY
+# ============================================
+
+if page == "📅 Tổng hợp ngày":
+    st.markdown("""
+    <div class="main-header">
+        <h1>📅 Tổng hợp theo ngày</h1>
+        <p>Xem nhanh số lượng tin, cảm xúc, nguồn tin và mã cổ phiếu theo từng ngày</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    ddf = filtered.dropna(subset=["thoi_gian_xuat_ban"]).copy()
+    if ddf.empty:
+        st.warning("Không có dữ liệu thời gian để tổng hợp theo ngày.")
+    else:
+        ddf["ngay"] = ddf["thoi_gian_xuat_ban"].dt.date
+
+        by_day = (
+            ddf.groupby("ngay")
+            .agg(
+                tong_bai=("id", "count"),
+                tin_tich_cuc=("nhan_cam_xuc", lambda s: (s == "POSITIVE").sum()),
+                tin_tieu_cuc=("nhan_cam_xuc", lambda s: (s == "NEGATIVE").sum()),
+                tin_trung_tinh=("nhan_cam_xuc", lambda s: (s == "NEUTRAL").sum()),
+                diem_tb=("diem_cam_xuc", "mean"),
+                so_nguon=("nguon_tin", "nunique"),
+                so_ma_ck=("ma_ck_list", lambda col: len({t for lst in col for t in (lst if isinstance(lst, list) else [])})),
+            )
+            .reset_index()
+            .sort_values("ngay", ascending=False)
+        )
+        by_day["diem_tb"] = by_day["diem_tb"].fillna(0.0).round(4)
+
+        st.markdown('<div class="section-header">📌 Bảng tổng hợp ngày</div>', unsafe_allow_html=True)
+        st.dataframe(
+            by_day.rename(
+                columns={
+                    "ngay": "Ngày",
+                    "tong_bai": "Tổng bài",
+                    "tin_tich_cuc": "Tích cực",
+                    "tin_tieu_cuc": "Tiêu cực",
+                    "tin_trung_tinh": "Trung tính",
+                    "diem_tb": "Điểm TB",
+                    "so_nguon": "Số nguồn",
+                    "so_ma_ck": "Số mã CK",
+                }
+            ),
+            use_container_width=True,
+            height=320,
+        )
+
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.markdown('<div class="section-header">📈 Số lượng tin theo ngày</div>', unsafe_allow_html=True)
+            fig_day = px.bar(
+                by_day.sort_values("ngay"),
+                x="ngay",
+                y="tong_bai",
+                labels={"ngay": "", "tong_bai": "Số bài"},
+                color_discrete_sequence=["#6366f1"],
+            )
+            fig_day.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#94a3b8", family="Inter", size=11),
+                xaxis=dict(gridcolor="rgba(99,102,241,0.08)"),
+                yaxis=dict(gridcolor="rgba(99,102,241,0.08)"),
+                margin=dict(l=0, r=0, t=10, b=0),
+                height=280,
+            )
+            st.plotly_chart(fig_day, use_container_width=True)
+
+        with c2:
+            st.markdown('<div class="section-header">💭 Điểm cảm xúc TB</div>', unsafe_allow_html=True)
+            fig_score = px.line(
+                by_day.sort_values("ngay"),
+                x="ngay",
+                y="diem_tb",
+                markers=True,
+                labels={"ngay": "", "diem_tb": "Điểm TB"},
+            )
+            fig_score.update_traces(line_color="#a78bfa")
+            fig_score.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#94a3b8", family="Inter", size=11),
+                xaxis=dict(gridcolor="rgba(99,102,241,0.08)"),
+                yaxis=dict(gridcolor="rgba(99,102,241,0.08)"),
+                margin=dict(l=0, r=0, t=10, b=0),
+                height=280,
+            )
+            st.plotly_chart(fig_score, use_container_width=True)
+
+        ngay_list = [str(d) for d in by_day["ngay"].tolist()]
+        ngay_chon = st.selectbox("📆 Chọn ngày để xem chi tiết", ngay_list)
+        dsel = ddf[ddf["ngay".strip()] == pd.to_datetime(ngay_chon).date()].copy()
+
+        st.markdown('<div class="section-header">📰 Chi tiết theo ngày đã chọn</div>', unsafe_allow_html=True)
+        left, right = st.columns(2)
+
+        with left:
+            src_count = (
+                dsel["nguon_tin"].value_counts().reset_index().rename(columns={"index": "Nguồn", "nguon_tin": "Số bài"})
+            )
+            st.caption("Top nguồn tin")
+            st.dataframe(src_count.head(10), use_container_width=True, height=260)
+
+        with right:
+            tickers = [t for lst in dsel["ma_ck_list"] for t in (lst if isinstance(lst, list) else [])]
+            if tickers:
+                tk_df = pd.Series(tickers).value_counts().reset_index()
+                tk_df.columns = ["Mã CK", "Số bài"]
+            else:
+                tk_df = pd.DataFrame(columns=["Mã CK", "Số bài"])
+            st.caption("Top mã CK")
+            st.dataframe(tk_df.head(15), use_container_width=True, height=260)
+
+        cols = [
+            "thoi_gian_xuat_ban",
+            "nguon_tin",
+            "danh_muc",
+            "tieu_de",
+            "nhan_cam_xuc",
+            "diem_cam_xuc",
+            "ma_chung_khoan_lien_quan",
+            "url",
+        ]
+        view = dsel[cols].sort_values("thoi_gian_xuat_ban", ascending=False)
+        view = view.rename(
+            columns={
+                "thoi_gian_xuat_ban": "Thời gian",
+                "nguon_tin": "Nguồn",
+                "danh_muc": "Danh mục",
+                "tieu_de": "Tiêu đề",
+                "nhan_cam_xuc": "Nhãn cảm xúc",
+                "diem_cam_xuc": "Điểm cảm xúc",
+                "ma_chung_khoan_lien_quan": "Mã CK",
+                "url": "URL",
+            }
+        )
+        st.dataframe(view, use_container_width=True, height=420)
+
+
+# ============================================
 # PAGE: TỔNG QUAN
 # ============================================
 
-if page == "📊 Tổng quan":
+elif page == "📊 Tổng quan":
     st.markdown("""
     <div class="main-header">
         <h1>🗞️ News Pipeline Monitor — Tổng quan</h1>
@@ -299,7 +452,7 @@ if page == "📊 Tổng quan":
         ("🧬", has_vec, "Có vector", "kpi-accent" if has_vec == total else "kpi-warn"),
         ("🎯", f"{avg_score:+.3f}", "Điểm TB", ""),
     ]
-    for c, (icon, val, label, cls) in zip(cols, kpis):
+    for c, (icon, val, label, cls) in zip(cols, kpis, strict=False):
         with c:
             score_color = ""
             if label == "Điểm TB":
@@ -438,7 +591,7 @@ elif page == "📋 Danh sách tin":
 
         # Quality indicators
         content_indicator = f'<span style="color:#4ade80;font-size:11px">📝 {len_goc}ch</span>' if len_goc > 0 else '<span style="color:#f87171;font-size:11px">📝 trống</span>'
-        vec_indicator = f'<span style="color:#4ade80;font-size:11px">🧬✓</span>' if r["has_vector"] else '<span style="color:#f87171;font-size:11px">🧬✗</span>'
+        vec_indicator = '<span style="color:#4ade80;font-size:11px">🧬✓</span>' if r["has_vector"] else '<span style="color:#f87171;font-size:11px">🧬✗</span>'
 
         summary_html = f'<div style="color:#64748b;font-size:12px;margin-top:4px;line-height:1.4">{tom_tat[:250]}{"..." if len(tom_tat) > 250 else ""}</div>' if tom_tat else ""
 
@@ -600,7 +753,7 @@ elif page == "🔍 Chi tiết bài báo":
             ("🏷️ Mã CK", article["has_tickers"], f"{len(tickers)} mã"),
             ("🧬 Vector", article["has_vector"], article["vector_id"][:8] + "..." if article["vector_id"] else "N/A"),
         ]
-        for c, (label, ok, detail) in zip(q_cols, checks):
+        for c, (label, ok, detail) in zip(q_cols, checks, strict=False):
             with c:
                 if ok:
                     st.success(f"✅ {label}\n\n{detail}")

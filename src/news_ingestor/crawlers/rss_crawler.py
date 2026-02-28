@@ -6,13 +6,12 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import feedparser
 
 from news_ingestor.crawlers.base import BaseCrawler
 from news_ingestor.models.article import BaiBaoTho
-from news_ingestor.utils.text_utils import loai_bo_html, chuan_hoa_khoang_trang
+from news_ingestor.utils.text_utils import chuan_hoa_khoang_trang, loai_bo_html
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +101,7 @@ class RSSCrawler(BaseCrawler):
 
     def _phan_tich_entry(
         self, entry: dict, ten_nguon: str
-    ) -> Optional[BaiBaoTho]:
+    ) -> BaiBaoTho | None:
         """Phân tích một entry RSS thành BaiBaoTho."""
         tieu_de = getattr(entry, "title", "")
         if not tieu_de:

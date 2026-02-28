@@ -16,20 +16,20 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "thoi_gian": datetime.now(tz=timezone.utc).isoformat(),
-            "cap_do": record.levelname,
-            "module": record.name,
-            "thong_diep": record.getMessage(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
         }
 
         # Thêm extra fields nếu có
         extra = getattr(record, "extra_fields", None)
         if isinstance(extra, dict):
-            payload["chi_tiet"] = extra
+            payload["extra"] = extra
 
         # Thêm exception info nếu có
         if record.exc_info and record.exc_info[1]:
-            payload["loi"] = str(record.exc_info[1])
+            payload["error"] = str(record.exc_info[1])
 
         return json.dumps(payload, ensure_ascii=False, default=str)
 
@@ -53,6 +53,9 @@ class ConsoleFormatter(logging.Formatter):
 
         prefix = f"{color}{self.BOLD}[{thoi_gian}] {record.levelname:>8}{self.RESET}"
         message = f"{prefix} │ {record.name}: {record.getMessage()}"
+
+        if record.exc_info and record.exc_info[1]:
+            message += f"\n{'':>22}└─ error: {record.exc_info[1]}"
 
         extra = getattr(record, "extra_fields", None)
         if isinstance(extra, dict):
@@ -87,6 +90,8 @@ def cau_hinh_logging(
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(cap_do.upper())
+
+    logging.raiseExceptions = False
 
     # Giảm noise từ thư viện bên ngoài
     logging.getLogger("httpx").setLevel(logging.WARNING)

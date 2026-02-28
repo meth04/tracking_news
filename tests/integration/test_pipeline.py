@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -18,14 +20,26 @@ def pipeline() -> LuongXuLy:
     import news_ingestor.storage.database as db_module
     db_module._quan_ly = None
 
-    db = lay_quan_ly_db("sqlite:///./data/test_pipeline.db")
+    db_name = f"test_pipeline_{uuid.uuid4().hex[:8]}.db"
+    db_url = f"sqlite:///./data/{db_name}"
+
+    db = lay_quan_ly_db(db_url)
     db.khoi_tao_bang()
 
-    return LuongXuLy(
-        kho_tin_tuc=KhoTinTuc("sqlite:///./data/test_pipeline.db"),
+    pipeline = LuongXuLy(
+        kho_tin_tuc=KhoTinTuc(db_url),
         kho_vector=None,
         tao_embedding=False,
     )
+
+    yield pipeline
+
+    db.dong_ket_noi()
+    db_module._quan_ly = None
+    try:
+        os.remove(f"./data/{db_name}")
+    except Exception:
+        pass
 
 
 class TestLuongXuLy:
@@ -45,6 +59,8 @@ class TestLuongXuLy:
         assert bai_bao.tieu_de != ""
         assert "FPT" in bai_bao.ma_chung_khoan_lien_quan
         assert bai_bao.diem_cam_xuc > 0  # Tích cực
+        assert bai_bao.impact_score >= 1
+        assert bai_bao.impact_level in {"LOW", "MEDIUM", "HIGH"}
 
     def test_xu_ly_mot_bai_tieu_cuc(self, pipeline: LuongXuLy):
         bai_tho = BaiBaoTho(
@@ -58,6 +74,7 @@ class TestLuongXuLy:
         bai_bao = pipeline.xu_ly_mot_bai(bai_tho)
         assert bai_bao is not None
         assert bai_bao.diem_cam_xuc < 0  # Tiêu cực
+        assert bai_bao.impact_level in {"LOW", "MEDIUM", "HIGH"}
 
     def test_xu_ly_hang_loat(self, pipeline: LuongXuLy):
         danh_sach = [
@@ -73,3 +90,4 @@ class TestLuongXuLy:
 
         ket_qua = pipeline.xu_ly_hang_loat(danh_sach)
         assert len(ket_qua) == 5
+        assert all(b.impact_level in {"LOW", "MEDIUM", "HIGH"} for b in ket_qua)

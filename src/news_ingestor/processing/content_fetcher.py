@@ -7,29 +7,60 @@ trích xuất body content từ từng trang.
 from __future__ import annotations
 
 import logging
+import random
 import re
 import time
-import random
-from typing import Optional
 
 import httpx
-from bs4 import BeautifulSoup, Tag
-
-from news_ingestor.utils.text_utils import chuan_hoa_khoang_trang
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
 # User-Agent pool
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
 ]
 
 # Tags to remove before extracting text
-REMOVE_TAGS = {"script", "style", "iframe", "nav", "footer", "header", "aside", "form", "noscript", "svg"}
-REMOVE_CLASSES_EXACT = {"social-share", "share-news", "banner", "advertisement", "related-news",
-                  "box-comment", "comment", "tags", "tag-list", "breadcrumb", "author-info"}
+REMOVE_TAGS = {
+    "script",
+    "style",
+    "iframe",
+    "nav",
+    "footer",
+    "header",
+    "aside",
+    "form",
+    "noscript",
+    "svg",
+}
+REMOVE_CLASSES_EXACT = {
+    "social-share",
+    "share-news",
+    "banner",
+    "advertisement",
+    "related-news",
+    "box-comment",
+    "comment",
+    "tags",
+    "tag-list",
+    "breadcrumb",
+    "author-info",
+}
 REMOVE_CLASSES_CONTAINS = {"ads-", "ad-slot", "adsbygoogle"}
 
 
@@ -76,7 +107,7 @@ class ContentFetcher:
     def __init__(self, timeout: int = 20, delay: float = 1.0):
         self._timeout = timeout
         self._delay = delay
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     def _get_client(self) -> httpx.Client:
         if self._client is None or self._client.is_closed:

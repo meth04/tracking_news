@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class DanhMuc(str, Enum):
+class DanhMuc(StrEnum):
     """Danh mục phân loại tin tức."""
 
     VI_MO = "MACRO"          # Tin tức vĩ mô (lãi suất, tỷ giá, GDP...)
@@ -16,7 +16,7 @@ class DanhMuc(str, Enum):
         return self.value
 
 
-class CamXuc(str, Enum):
+class CamXuc(StrEnum):
     """Kết quả phân tích cảm xúc bài báo."""
 
     TICH_CUC = "POSITIVE"    # Tin tích cực
@@ -27,7 +27,7 @@ class CamXuc(str, Enum):
         return self.value
 
 
-class TrangThai(str, Enum):
+class TrangThai(StrEnum):
     """Trạng thái xử lý của bài báo trong pipeline."""
 
     CHO_XU_LY = "PENDING"         # Chờ xử lý NLP

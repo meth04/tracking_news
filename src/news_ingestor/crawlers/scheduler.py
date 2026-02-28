@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from news_ingestor.crawlers.base import BaseCrawler
 from news_ingestor.crawlers.cafef import CafeFCrawler
@@ -26,7 +26,7 @@ class BoLichThuThap:
 
     def __init__(self):
         self._crawlers: list[BaseCrawler] = []
-        self._callback: Optional[Callable[[list[BaiBaoTho]], None]] = None
+        self._callback: Callable[[list[BaiBaoTho]], None] | None = None
 
     def dang_ky_tat_ca(self) -> None:
         """Đăng ký tất cả crawlers mặc định."""
@@ -72,16 +72,21 @@ class BoLichThuThap:
                     exc_info=True,
                 )
 
-        # Loại bỏ trùng lặp theo URL
-        da_thay: set[str] = set()
+        # Loại bỏ trùng lặp theo URL chuẩn hóa hoặc hash tiêu đề
+        da_thay_url: set[str] = set()
+        da_thay_tieu_de: set[str] = set()
         khong_trung: list[BaiBaoTho] = []
         for bai in tat_ca_tin:
-            if bai.url not in da_thay:
-                da_thay.add(bai.url)
-                khong_trung.append(bai)
+            if bai.url_chuan_hoa in da_thay_url or bai.tieu_de_hash in da_thay_tieu_de:
+                continue
+            da_thay_url.add(bai.url_chuan_hoa)
+            da_thay_tieu_de.add(bai.tieu_de_hash)
+            khong_trung.append(bai)
 
+        da_loai = len(tat_ca_tin) - len(khong_trung)
         logger.info(
-            f"Tổng kết thu thập: {len(khong_trung)} bài (đã loại {len(tat_ca_tin) - len(khong_trung)} trùng lặp)",
+            f"Tổng kết thu thập: {len(khong_trung)} bài "
+            f"(đã loại {da_loai} trùng lặp)",
             extra={"extra_fields": {
                 "tong_thu_thap": len(tat_ca_tin),
                 "sau_loai_trung": len(khong_trung),
@@ -98,7 +103,7 @@ class BoLichThuThap:
         return khong_trung
 
     def chay_daemon(self, khoang_cach_giay: int = 900) -> None:
-        """Chạy thu thập theo chu kỳ (blocking).
+        """Chạy thu thập theo chu kỳ (blocking) với retry/backoff.
 
         Args:
             khoang_cach_giay: Khoảng cách giữa các lần chạy (mặc định 15 phút).
@@ -110,21 +115,45 @@ class BoLichThuThap:
             f"({khoang_cach_giay // 60} phút)"
         )
 
+        so_lan_loi_lien_tiep = 0
+
         while True:
             try:
                 self.chay_mot_lan()
+                so_lan_loi_lien_tiep = 0
             except KeyboardInterrupt:
                 logger.info("Nhận tín hiệu dừng, đang thoát...")
                 break
             except Exception as e:
+                so_lan_loi_lien_tiep += 1
                 logger.error(f"Lỗi trong chu kỳ daemon: {e}", exc_info=True)
 
-            logger.info(f"Chờ {khoang_cach_giay}s đến chu kỳ tiếp theo...")
+            thoi_gian_cho = self._tinh_backoff_giay(
+                khoang_cach_co_so=khoang_cach_giay,
+                so_lan_loi_lien_tiep=so_lan_loi_lien_tiep,
+            )
+
+            if so_lan_loi_lien_tiep > 0:
+                logger.warning(
+                    f"Đang backoff do lỗi liên tiếp ({so_lan_loi_lien_tiep}): chờ {thoi_gian_cho}s"
+                )
+            else:
+                logger.info(f"Chờ {thoi_gian_cho}s đến chu kỳ tiếp theo...")
+
             try:
-                time.sleep(khoang_cach_giay)
+                time.sleep(thoi_gian_cho)
             except KeyboardInterrupt:
                 logger.info("Nhận tín hiệu dừng, đang thoát...")
                 break
+
+    @staticmethod
+    def _tinh_backoff_giay(khoang_cach_co_so: int, so_lan_loi_lien_tiep: int) -> int:
+        """Tính thời gian chờ chu kỳ kế tiếp với exponential backoff có giới hạn."""
+        if so_lan_loi_lien_tiep <= 0:
+            return khoang_cach_co_so
+
+        he_so = min(2 ** min(so_lan_loi_lien_tiep, 5), 32)
+        return min(khoang_cach_co_so * he_so, 7200)
 
     def dong_tat_ca(self) -> None:
         """Đóng tất cả crawlers."""

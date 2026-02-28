@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from config.settings import lay_cau_hinh_nlp
 from news_ingestor.models.article import BaiBao, BaiBaoTho
@@ -12,11 +11,15 @@ from news_ingestor.processing.cleaner import BoLamSach
 from news_ingestor.processing.content_fetcher import ContentFetcher
 from news_ingestor.processing.embeddings import BoTaoEmbeddings
 from news_ingestor.processing.entity_extractor import BoTrichXuatThucThe
+from news_ingestor.processing.impact_classifier import BoPhanLoaiTacDong
 from news_ingestor.processing.sentiment import BoPhanTichCamXuc
 from news_ingestor.storage.repository import KhoTinTuc
 from news_ingestor.storage.vector_store import KhoVector
+from news_ingestor.utils.alerting import BoCanhBaoTelegram
+from news_ingestor.utils.metrics import lay_metrics
 
 logger = logging.getLogger(__name__)
+metrics = lay_metrics()
 
 
 class LuongXuLy:
@@ -28,18 +31,20 @@ class LuongXuLy:
 
     def __init__(
         self,
-        kho_tin_tuc: Optional[KhoTinTuc] = None,
-        kho_vector: Optional[KhoVector] = None,
+        kho_tin_tuc: KhoTinTuc | None = None,
+        kho_vector: KhoVector | None = None,
         tao_embedding: bool = True,
         fetch_content: bool = True,
+        bo_canh_bao: BoCanhBaoTelegram | None = None,
     ):
         # Khởi tạo các module xử lý
         self._lam_sach = BoLamSach()
         self._trich_xuat = BoTrichXuatThucThe()
+        self._phan_loai_tac_dong = BoPhanLoaiTacDong()
 
         # Content Fetcher — lấy nội dung đầy đủ từ URL gốc
         self._fetch_content = fetch_content
-        self._content_fetcher: Optional[ContentFetcher] = None
+        self._content_fetcher: ContentFetcher | None = None
         if fetch_content:
             self._content_fetcher = ContentFetcher(timeout=20, delay=0.8)
 
@@ -50,7 +55,7 @@ class LuongXuLy:
 
         # Embedding generator (lazy load)
         self._tao_embedding = tao_embedding
-        self._embeddings: Optional[BoTaoEmbeddings] = None
+        self._embeddings: BoTaoEmbeddings | None = None
         if tao_embedding:
             try:
                 self._embeddings = BoTaoEmbeddings()
@@ -61,6 +66,7 @@ class LuongXuLy:
         # Storage
         self._kho_tin_tuc = kho_tin_tuc or KhoTinTuc()
         self._kho_vector = kho_vector
+        self._bo_canh_bao = bo_canh_bao
 
         logger.info(
             "Đã khởi tạo pipeline NLP",
@@ -69,10 +75,11 @@ class LuongXuLy:
                 "gemini": gemini_key is not None and gemini_key != "",
                 "vector_db": kho_vector is not None,
                 "content_fetch": fetch_content,
+                "telegram_alert": bo_canh_bao is not None,
             }},
         )
 
-    def xu_ly_mot_bai(self, bai_tho: BaiBaoTho) -> Optional[BaiBao]:
+    def xu_ly_mot_bai(self, bai_tho: BaiBaoTho) -> BaiBao | None:
         """Xử lý một bài báo thô qua pipeline đầy đủ.
 
         Returns:
@@ -93,8 +100,9 @@ class LuongXuLy:
                             f"(was {len(noi_dung_goc)} chars) for: {bai_tho.tieu_de[:50]}"
                         )
                     else:
+                        loi_fetch = fetch_result.get("error", "unknown")
                         logger.debug(
-                            f"Content fetch failed for {bai_tho.url}: {fetch_result.get('error', 'unknown')}"
+                            f"Content fetch failed for {bai_tho.url}: {loi_fetch}"
                         )
                 except Exception as e:
                     logger.warning(f"Content fetch error: {e}")
@@ -114,7 +122,14 @@ class LuongXuLy:
             # 3. Phân tích cảm xúc (dùng nội dung đầy đủ)
             ket_qua_cam_xuc = self._cam_xuc.phan_tich(van_ban_phan_tich)
 
-            # 4. Tạo đối tượng BaiBao
+            # 4. Chấm điểm tác động
+            ket_qua_tac_dong = self._phan_loai_tac_dong.phan_loai(
+                tieu_de=tieu_de_sach,
+                noi_dung=noi_dung_sach,
+                ma_ck=ket_qua_ner["ma_chung_khoan"],
+            )
+
+            # 5. Tạo đối tượng BaiBao
             bai_bao = BaiBao(
                 tieu_de=tieu_de_sach,
                 noi_dung_tom_tat=tom_tat,
@@ -126,10 +141,14 @@ class LuongXuLy:
                 ma_chung_khoan_lien_quan=ket_qua_ner["ma_chung_khoan"],
                 diem_cam_xuc=ket_qua_cam_xuc["diem"],
                 nhan_cam_xuc=ket_qua_cam_xuc["nhan"],
+                impact_score=ket_qua_tac_dong["impact_score"],
+                impact_level=ket_qua_tac_dong["impact_level"],
+                impact_tags=ket_qua_tac_dong["impact_tags"],
+                is_high_impact=ket_qua_tac_dong["is_high_impact"],
                 trang_thai=TrangThai.HOAN_THANH,
             )
 
-            # 5. Tạo embedding và lưu Vector DB
+            # 6. Tạo embedding và lưu Vector DB
             if self._tao_embedding and self._embeddings and self._kho_vector:
                 try:
                     vector = self._embeddings.tao_embedding(van_ban_phan_tich)
@@ -148,12 +167,19 @@ class LuongXuLy:
                 except Exception as e:
                     logger.warning(f"Lỗi tạo embedding: {e}")
 
-            # 6. Lưu vào database
+            # 7. Lưu vào database
             self._kho_tin_tuc.luu_bai_bao(bai_bao)
+
+            # 8. Gửi cảnh báo nếu là tin tác động cao
+            if self._bo_canh_bao and bai_bao.is_high_impact:
+                if self._bo_canh_bao.gui_canh_bao_bai_bao(bai_bao):
+                    metrics.tang("alerts_sent")
+                else:
+                    metrics.tang("alerts_failed")
 
             return bai_bao
 
-        except Exception as e:
+        except Exception:
             logger.error(
                 f"Lỗi xử lý bài: {bai_tho.tieu_de[:50]}...",
                 exc_info=True,
@@ -172,14 +198,17 @@ class LuongXuLy:
         ket_qua: list[BaiBao] = []
         loi = 0
 
+        metrics.tang("pipeline_batches")
         logger.info(f"Bắt đầu xử lý {len(danh_sach)} bài báo qua pipeline NLP")
 
         for i, bai_tho in enumerate(danh_sach, 1):
             bai_bao = self.xu_ly_mot_bai(bai_tho)
             if bai_bao:
                 ket_qua.append(bai_bao)
+                metrics.tang("pipeline_articles_success")
             else:
                 loi += 1
+                metrics.tang("pipeline_articles_failed")
 
             # Báo cáo tiến trình mỗi 10 bài
             if i % 10 == 0:
