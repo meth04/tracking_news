@@ -110,6 +110,8 @@ Main entrypoint: `news-ingestor`
   - Show high-impact news.
 - `news-ingestor stats`
   - Show system statistics.
+- `news-ingestor evaluate --days 7 --limit 500`
+  - Evaluate pipeline quality KPIs on recently ingested data.
 - `news-ingestor serve-mcp`
   - Start MCP server over stdio.
 - `news-ingestor demo`
@@ -203,6 +205,24 @@ news-ingestor demo
 python -m ruff check .
 python -m pytest -q
 ```
+
+## Evaluation
+
+Pipeline quality summary:
+
+```bash
+news-ingestor evaluate --days 7 --limit 500
+```
+
+JSON output:
+
+```bash
+news-ingestor evaluate --days 7 --limit 500 --json-output
+```
+
+Detailed technical report:
+
+- `docs/TECHNICAL_REPORT.md`
 
 ---
 

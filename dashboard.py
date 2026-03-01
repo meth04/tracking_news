@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
+import textwrap
 from datetime import datetime
+from html import escape
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +20,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
+from config.settings import lay_cau_hinh_nlp
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -40,10 +43,8 @@ st.set_page_config(
 
 BADGE_CSS = """
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: transparent; color: #e2e8f0; }
-    a { color: #a78bfa; text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    .detail-card a { color: #a78bfa; text-decoration: none; }
+    .detail-card a:hover { text-decoration: underline; }
     .badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
     .badge-positive { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
     .badge-negative { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
@@ -193,18 +194,25 @@ def sentiment_badge(label, score):
 
 
 def source_badge(s):
-    return f'<span class="badge badge-source">{s}</span>'
+    return f'<span class="badge badge-source">{escape(str(s))}</span>'
 
 
 def category_badge(c):
-    m = {"MACRO": "Vĩ mô", "STOCK": "CK", "COMPANY": "DN", "REAL_ESTATE": "BĐS", "INDUSTRY": "Ngành", "MICRO": "Vi mô"}
-    return f'<span class="badge badge-category">{m.get(c, c)}</span>'
+    m = {
+        "MACRO": "Vĩ mô",
+        "STOCK": "CK",
+        "COMPANY": "DN",
+        "REAL_ESTATE": "BĐS",
+        "INDUSTRY": "Ngành",
+        "MICRO": "Vi mô",
+    }
+    return f'<span class="badge badge-category">{escape(str(m.get(c, c)))}</span>'
 
 
 def stock_badges(lst):
     if not lst:
         return ""
-    return " ".join(f'<span class="badge badge-stock">{t}</span>' for t in lst[:6])
+    return " ".join(f'<span class="badge badge-stock">{escape(str(t))}</span>' for t in lst[:6])
 
 
 def quality_badge(val, thresh_ok=1, thresh_warn=0):
@@ -656,25 +664,54 @@ elif page == "🔍 Chi tiết bài báo":
     </div>
     """, unsafe_allow_html=True)
 
-    # Article selector
-    articles_display = filtered[["id", "tieu_de", "nguon_tin", "thoi_gian_xuat_ban"]].copy()
-    articles_display["label"] = articles_display.apply(
-        lambda r: f"[{r['nguon_tin']}] {r['tieu_de'][:70]}", axis=1
-    )
+    if filtered.empty:
+        st.warning("Không có bài báo phù hợp với bộ lọc hiện tại.")
+    else:
+        # Article selector
+        articles_display = filtered[["id", "tieu_de", "nguon_tin", "thoi_gian_xuat_ban"]].copy()
+        articles_display["label"] = articles_display.apply(
+            lambda r: f"[{r['nguon_tin']}] {r['tieu_de'][:70]}", axis=1
+        )
 
-    selected_idx = st.selectbox(
-        "Chọn bài báo",
-        range(len(articles_display)),
-        format_func=lambda i: articles_display.iloc[i]["label"],
-    )
-
-    if selected_idx is not None:
+        selected_idx = st.selectbox(
+            "Chọn bài báo",
+            range(len(articles_display)),
+            format_func=lambda i: articles_display.iloc[i]["label"],
+        )
         article = filtered.iloc[selected_idx]
 
         # Header with badges
         nhan = article["nhan_cam_xuc"] or "NEUTRAL"
         diem = article["diem_cam_xuc"] if pd.notna(article["diem_cam_xuc"]) else 0.0
         tickers = article["ma_ck_list"] if isinstance(article["ma_ck_list"], list) else []
+
+        title_safe = escape(str(article["tieu_de"]))
+        source_safe = escape(str(article["nguon_tin"]))
+        category_safe = escape(str(article["danh_muc"]))
+        published_safe = escape(str(article["thoi_gian_xuat_ban"]))
+        status_safe = escape(str(article["trang_thai"]))
+        article_id_safe = escape(str(article["id"]))
+        url_safe = escape(str(article["url"]))
+        ticker_text = (
+            escape(", ".join(tickers))
+            if tickers
+            else '<span style="color:#64748b">Không phát hiện</span>'
+        )
+        vector_text = (
+            escape(str(article["vector_id"]))
+            if article["vector_id"]
+            else '<span style="color:#f87171">Không có</span>'
+        )
+        summary_text = (
+            '<span class="empty">⚠️ Chưa có nội dung tóm tắt</span>'
+            if not article["noi_dung_tom_tat"]
+            else escape(str(article["noi_dung_tom_tat"]))
+        )
+        full_text = (
+            '<span class="empty">⚠️ Chưa có nội dung gốc — Crawler chưa lấy được body bài báo</span>'
+            if not article["noi_dung_goc"]
+            else escape(str(article["noi_dung_goc"]))
+        )
 
         detail_html = f"""
         <style>{BADGE_CSS}
@@ -683,7 +720,10 @@ elif page == "🔍 Chi tiết bài báo":
             border: 1px solid rgba(99,102,241,0.2);
             border-radius: 14px;
             padding: 24px;
+            font-family: 'Inter', sans-serif;
+            color: #e2e8f0;
         }}
+        .detail-card * {{ box-sizing: border-box; }}
         .detail-card h3 {{ color:#e2e8f0; font-size:20px; font-weight:600; margin:0 0 16px; line-height:1.4; }}
         .meta-grid {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-bottom:16px; }}
         .meta-item {{ display:flex; gap:8px; padding:8px 0; border-bottom:1px solid rgba(99,102,241,0.08); }}
@@ -696,13 +736,13 @@ elif page == "🔍 Chi tiết bài báo":
             padding: 18px;
             margin-top: 16px;
         }}
-        .content-box h4 {{ color:#a78bfa; font-size:14px; font-weight:600; margin:0 0 10px; }}
-        .content-box p {{ color:#cbd5e1; font-size:14px; line-height:1.7; white-space:pre-wrap; }}
-        .content-box .empty {{ color:#64748b; font-style:italic; }}
+        .content-box h4 {{ color:#a78bfa; font-size:15px; font-weight:600; margin:0 0 12px; }}
+        .content-box p {{ color:#e2e8f0; font-size:16px; line-height:1.8; white-space:pre-wrap; }}
+        .content-box .empty {{ color:#94a3b8; font-style:italic; }}
         </style>
 
         <div class="detail-card">
-            <h3>{article["tieu_de"]}</h3>
+            <h3>{title_safe}</h3>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
                 {source_badge(article["nguon_tin"])}
                 {category_badge(article["danh_muc"])}
@@ -712,35 +752,58 @@ elif page == "🔍 Chi tiết bài báo":
 
             <div class="meta-grid">
                 <div>
-                    <div class="meta-item"><span class="meta-label">🆔 ID</span><span class="meta-value" style="font-family:monospace;font-size:11px">{article["id"]}</span></div>
-                    <div class="meta-item"><span class="meta-label">📡 Nguồn</span><span class="meta-value">{article["nguon_tin"]}</span></div>
-                    <div class="meta-item"><span class="meta-label">📂 Danh mục</span><span class="meta-value">{article["danh_muc"]}</span></div>
-                    <div class="meta-item"><span class="meta-label">📅 Xuất bản</span><span class="meta-value">{article["thoi_gian_xuat_ban"]}</span></div>
+                    <div class="meta-item"><span class="meta-label">🆔 ID</span><span class="meta-value" style="font-family:monospace;font-size:11px">{article_id_safe}</span></div>
+                    <div class="meta-item"><span class="meta-label">📡 Nguồn</span><span class="meta-value">{source_safe}</span></div>
+                    <div class="meta-item"><span class="meta-label">📂 Danh mục</span><span class="meta-value">{category_safe}</span></div>
+                    <div class="meta-item"><span class="meta-label">📅 Xuất bản</span><span class="meta-value">{published_safe}</span></div>
                 </div>
                 <div>
                     <div class="meta-item"><span class="meta-label">💭 Điểm CX</span><span class="meta-value" style="color:{"#4ade80" if diem > 0.1 else ("#f87171" if diem < -0.1 else "#94a3b8")}">{diem:+.4f}</span></div>
-                    <div class="meta-item"><span class="meta-label">🏷️ Mã CK</span><span class="meta-value">{", ".join(tickers) if tickers else '<span style="color:#64748b">Không phát hiện</span>'}</span></div>
-                    <div class="meta-item"><span class="meta-label">🧬 Vector ID</span><span class="meta-value" style="font-family:monospace;font-size:11px">{article["vector_id"] or '<span style="color:#f87171">Không có</span>'}</span></div>
-                    <div class="meta-item"><span class="meta-label">📋 Trạng thái</span><span class="meta-value">{article["trang_thai"]}</span></div>
+                    <div class="meta-item"><span class="meta-label">🏷️ Mã CK</span><span class="meta-value">{ticker_text}</span></div>
+                    <div class="meta-item"><span class="meta-label">🧬 Vector ID</span><span class="meta-value" style="font-family:monospace;font-size:11px">{vector_text}</span></div>
+                    <div class="meta-item"><span class="meta-label">📋 Trạng thái</span><span class="meta-value">{status_safe}</span></div>
                 </div>
             </div>
 
-            <div class="meta-item"><span class="meta-label">🔗 URL</span><span class="meta-value"><a href="{article["url"]}" target="_blank">{article["url"]}</a></span></div>
+            <div class="meta-item"><span class="meta-label">🔗 URL</span><span class="meta-value"><a href="{url_safe}" target="_blank">{url_safe}</a></span></div>
 
             <div class="content-box">
                 <h4>📝 Nội dung tóm tắt ({article["len_tom_tat"]} ký tự)</h4>
-                <p>{"<span class='empty'>⚠️ Chưa có nội dung tóm tắt</span>" if not article["noi_dung_tom_tat"] else article["noi_dung_tom_tat"]}</p>
+                <p>{summary_text}</p>
             </div>
 
             <div class="content-box">
                 <h4>📄 Nội dung gốc ({article["len_goc"]} ký tự)</h4>
-                <p>{"<span class='empty'>⚠️ Chưa có nội dung gốc — Crawler chưa lấy được body bài báo</span>" if not article["noi_dung_goc"] else article["noi_dung_goc"]}</p>
+                <p>{full_text}</p>
             </div>
         </div>
         """
 
-        content_height = max(600, 400 + article["len_goc"] // 3 + article["len_tom_tat"] // 3)
-        components.html(detail_html, height=min(content_height, 2000), scrolling=True)
+        st.html(textwrap.dedent(detail_html))
+
+        # Re-run sentiment analysis button
+        if st.button("🔄 Phân tích lại Cảm xúc (Dùng quy tắc & AI mới)", key=f"re-sent-{article['id']}"):
+            with st.spinner("Đang phân tích lại..."):
+                from news_ingestor.processing.sentiment import BoPhanTichCamXuc
+                cau_hinh_nlp = lay_cau_hinh_nlp()
+                gemini_key = cau_hinh_nlp.gemini_api_key if cau_hinh_nlp.gemini_api_key else None
+                phan_tich = BoPhanTichCamXuc(gemini_api_key=gemini_key)
+                # Dùng full content nếu có
+                text_to_analyze = f"{article['tieu_de']} {article['noi_dung_tom_tat']} {article['noi_dung_goc']}"
+                res = phan_tich.phan_tich(text_to_analyze)
+                
+                # Update DB
+                conn = sqlite3.connect(str(DB_PATH))
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE tin_tuc_tai_chinh SET nhan_cam_xuc = ?, diem_cam_xuc = ? WHERE id = ?",
+                    (res["nhan"].value if hasattr(res["nhan"], 'value') else str(res["nhan"]), res["diem"], article["id"]),
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"Đã cập nhật: {res['nhan']} ({res['diem']:+.2f})")
+                st.cache_data.clear()
+                st.rerun()
 
         # Quality analysis
         st.markdown('<div class="section-header">🔬 Phân tích chất lượng bài báo</div>', unsafe_allow_html=True)

@@ -26,6 +26,7 @@ TU_TICH_CUC = {
     # Đầu tư
     "nâng mục tiêu giá", "khuyến nghị mua", "outperform",
     "overweight", "upgrade", "growth", "profit", "record",
+    "sát nhập", "hợp nhất", "mua lại", "niêm yết", "phát hành thêm",
 }
 
 TU_TIEU_CUC = {
@@ -43,6 +44,8 @@ TU_TIEU_CUC = {
     # Vĩ mô tiêu cực
     "lạm phát tăng", "lãi suất tăng", "tỷ giá tăng", "thất nghiệp tăng",
     "suy thoái", "đình trệ", "khủng hoảng",
+    "bắt giam", "tấn công", "khởi tố", "khám xét", "vi phạm", "xử phạt", "đình chỉ",
+    "chiếm đoạt", "lừa đảo", "truy tố", "tội phạm",
 }
 
 TU_TIN_DON = {
@@ -103,15 +106,20 @@ class BoPhanTichCamXuc:
     def _phan_tich_gemini(self, text: str) -> dict | None:
         """Phân tích cảm xúc bằng Gemini AI."""
         try:
-            prompt = f"""Bạn là chuyên gia phân tích cảm xúc tin tức tài chính Việt Nam.
+            prompt = f"""Bạn là chuyên gia phân tích cảm xúc tin tức tài chính Việt Nam chuyên nghiệp.
+Nhiệm vụ: Phân tích cảm xúc bài báo đối với thị trường tài chính hoặc một doanh nghiệp cụ thể.
 
-Phân tích bài báo sau và trả lời CHÍNH XÁC theo format:
-NHAN: POSITIVE hoặc NEGATIVE hoặc NEUTRAL
-DIEM: (số thực từ -1.0 đến 1.0)
-TIN_DON: TRUE hoặc FALSE
+Quy tắc quan trọng:
+1. Hãy nhạy bén với tin tức tiêu cực như: bắt giam lãnh đạo, tấn công vũ trang, khởi tố, lừa đảo, lỗ nặng. Những tin này PHẢI là NEGATIVE.
+2. Các hoạt động M&A (sát nhập, mua lại) thường là POSITIVE hoặc NEUTRAL tùy ngữ cảnh. Nếu là hai doanh nghiệp lớn sát nhập để tăng sức mạnh thì thường là POSITIVE.
+3. Nếu tin tức có tác động hỗn hợp, hãy ưu tiên tác động ngắn hạn lên giá cổ phiếu.
+4. Trả lời CHÍNH XÁC theo format sau (không giải thích thêm):
+NHAN: [POSITIVE | NEGATIVE | NEUTRAL]
+DIEM: [số thực từ -1.0 đến 1.0]
+TIN_DON: [TRUE | FALSE]
 
 Bài báo:
-{text[:1000]}"""
+{text[:2000]}"""
 
             response = self._gemini_client.models.generate_content(
                 model="gemini-2.0-flash-lite",

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import socket
 import subprocess
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 import click
@@ -252,6 +254,50 @@ def thong_ke() -> None:
     click.echo(f"║  🎯 Điểm TB (7d):    {thong_ke.diem_trung_binh:>+10.4f}          ║")
     click.echo(f"║  📊 Xu hướng:         {thong_ke.xu_huong:>10}          ║")
     click.echo("╚══════════════════════════════════════════╝")
+
+
+@cli.command("evaluate")
+@click.option("--days", type=int, default=7, help="Khung thời gian đánh giá (ngày)")
+@click.option("--limit", type=int, default=500, help="Số bản ghi tối đa để đánh giá")
+@click.option("--json-output", is_flag=True, default=False, help="In kết quả dạng JSON")
+def danh_gia(days: int, limit: int, json_output: bool) -> None:
+    """🧪 Đánh giá chất lượng pipeline trên dữ liệu đã ingest."""
+    from news_ingestor.storage.database import lay_quan_ly_db
+    from news_ingestor.storage.repository import KhoTinTuc
+    from news_ingestor.utils.evaluation import tao_bao_cao_pipeline
+
+    db = lay_quan_ly_db()
+    db.khoi_tao_bang()
+
+    kho = KhoTinTuc()
+    ds = kho.lay_tat_ca(gioi_han=limit)
+    bao_cao = tao_bao_cao_pipeline(ds_bai=ds, so_ngay=days)
+
+    if json_output:
+        click.echo(json.dumps(asdict(bao_cao), ensure_ascii=False, indent=2))
+        return
+
+    click.echo("Evaluation summary")
+    click.echo(f"- Window (days): {bao_cao.window_days}")
+    click.echo(f"- Total articles: {bao_cao.total_articles}")
+    click.echo(f"- Unique sources: {bao_cao.unique_sources}")
+    click.echo(f"- Content coverage: {bao_cao.coverage['has_content_ratio'] * 100:.2f}%")
+    click.echo(f"- Summary coverage: {bao_cao.coverage['has_summary_ratio'] * 100:.2f}%")
+    click.echo(f"- Sentiment coverage: {bao_cao.coverage['has_sentiment_ratio'] * 100:.2f}%")
+    click.echo(f"- Ticker coverage: {bao_cao.coverage['has_tickers_ratio'] * 100:.2f}%")
+    click.echo(f"- Vector coverage: {bao_cao.coverage['has_vector_ratio'] * 100:.2f}%")
+    click.echo(
+        "- Impact dist (LOW/MEDIUM/HIGH): "
+        f"{bao_cao.impact_distribution['LOW']}/"
+        f"{bao_cao.impact_distribution['MEDIUM']}/"
+        f"{bao_cao.impact_distribution['HIGH']}"
+    )
+    click.echo(f"- High impact ratio: {bao_cao.high_impact_ratio * 100:.2f}%")
+    click.echo(f"- Avg sentiment: {bao_cao.sentiment_average:+.4f}")
+    click.echo(
+        f"- Avg length (orig/sum): {bao_cao.avg_original_length:.2f}/"
+        f"{bao_cao.avg_summary_length:.2f}"
+    )
 
 
 def main() -> None:
